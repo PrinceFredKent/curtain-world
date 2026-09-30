@@ -9,17 +9,17 @@ import { useToast } from '../components/ui/Toast'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Lock, Mail, Eye, EyeOff, UserCheck, Sparkles, ShieldCheck } from 'lucide-react'
+import { Lock, UserCheck, Eye, EyeOff, Sparkles } from 'lucide-react'
 
 const loginSchema = z.object({
-  email: z.string().email('Enter a valid email address'),
+  identifier: z.string().min(3, 'Enter your email or phone number'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 })
 
 const QUICK_DEMO_ACCOUNTS = [
-  { name: 'Mukasa Joseph', role: 'Sales Employee', email: 'mukasa@curtainworld.ug', color: 'blue' },
-  { name: 'Nakato Sarah', role: 'Cashier', email: 'nakato@curtainworld.ug', color: 'green' },
-  { name: 'Okello Brian', role: 'Manager / Both', email: 'okello@curtainworld.ug', color: 'purple' },
+  { name: 'Mukasa Joseph', role: 'Sales Employee', identifier: '0772345678', display: '0772 345 678' },
+  { name: 'Nakato Sarah', role: 'Cashier', identifier: '0701987654', display: '0701 987 654' },
+  { name: 'Okello Brian', role: 'Manager / Both', identifier: 'okello@curtainworld.ug', display: 'okello@curtainworld.ug' },
 ]
 
 export function Login() {
@@ -35,7 +35,7 @@ export function Login() {
   const { register, handleSubmit, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: '',
+      identifier: '',
       password: '',
     },
   })
@@ -43,20 +43,20 @@ export function Login() {
   const onSubmit = async (data) => {
     setLoading(true)
     try {
-      await signIn(data.email, data.password)
+      await signIn(data.identifier, data.password)
       toast({ type: 'success', message: 'Welcome back to Curtain World!' })
       navigate(from, { replace: true })
     } catch (err) {
-      toast({ type: 'error', message: err.message || 'Login failed. Check your credentials.' })
+      toast({ type: 'error', message: err.message || 'Login failed. Check your email/phone and password.' })
     } finally {
       setLoading(false)
     }
   }
 
-  const handleQuickLogin = (email) => {
-    setValue('email', email)
+  const handleQuickLogin = (id) => {
+    setValue('identifier', id)
     setValue('password', 'password123')
-    onSubmit({ email, password: 'password123' })
+    onSubmit({ identifier: id, password: 'password123' })
   }
 
   return (
@@ -86,12 +86,11 @@ export function Login() {
           <CardContent className="p-6 sm:p-8 space-y-5">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <Input
-                label="Email Address"
-                type="email"
-                placeholder="you@curtainworld.ug"
-                icon={<Mail className="h-4 w-4" />}
-                error={errors.email?.message}
-                {...register('email')}
+                label="Email / Phone Number"
+                placeholder="e.g. you@curtainworld.ug or 0772 000 000"
+                icon={<UserCheck className="h-4 w-4" />}
+                error={errors.identifier?.message}
+                {...register('identifier')}
               />
 
               <div className="space-y-1">
@@ -159,9 +158,9 @@ export function Login() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {QUICK_DEMO_ACCOUNTS.map(acc => (
               <button
-                key={acc.email}
+                key={acc.identifier}
                 type="button"
-                onClick={() => handleQuickLogin(acc.email)}
+                onClick={() => handleQuickLogin(acc.identifier)}
                 className="text-left p-2 rounded-lg border transition-all text-xs flex flex-col justify-between"
                 style={{
                   background: 'var(--surface-hover)',
@@ -171,7 +170,8 @@ export function Login() {
                 onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
               >
                 <span className="font-medium" style={{ color: 'var(--fg)' }}>{acc.name}</span>
-                <span className="text-[10px] mt-0.5" style={{ color: 'var(--brand)' }}>{acc.role}</span>
+                <span className="text-[10px] opacity-70" style={{ color: 'var(--fg-muted)' }}>{acc.display}</span>
+                <span className="text-[10px] font-semibold mt-1" style={{ color: 'var(--brand)' }}>{acc.role}</span>
               </button>
             ))}
           </div>

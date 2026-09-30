@@ -293,10 +293,12 @@ class MockQueryBuilder {
   }
 }
 
+const normalizePhone = (p) => (p || '').replace(/\D/g, '').slice(-9)
+
 const DEMO_USERS = [
-  { id: '11111111-1111-1111-1111-111111111111', email: 'mukasa@curtainworld.ug', password: 'password123', user_metadata: { full_name: 'Mukasa Joseph', role: 'employee' } },
-  { id: '22222222-2222-2222-2222-222222222222', email: 'nakato@curtainworld.ug', password: 'password123', user_metadata: { full_name: 'Nakato Sarah', role: 'cashier' } },
-  { id: '33333333-3333-3333-3333-333333333333', email: 'okello@curtainworld.ug', password: 'password123', user_metadata: { full_name: 'Okello Brian', role: 'both' } },
+  { id: '11111111-1111-1111-1111-111111111111', email: 'mukasa@curtainworld.ug', phone: '0772345678', password: 'password123', user_metadata: { full_name: 'Mukasa Joseph', role: 'employee', phone: '+256 772 345 678' } },
+  { id: '22222222-2222-2222-2222-222222222222', email: 'nakato@curtainworld.ug', phone: '0701987654', password: 'password123', user_metadata: { full_name: 'Nakato Sarah', role: 'cashier', phone: '+256 701 987 654' } },
+  { id: '33333333-3333-3333-3333-333333333333', email: 'okello@curtainworld.ug', phone: '0752456789', password: 'password123', user_metadata: { full_name: 'Okello Brian', role: 'both', phone: '+256 752 456 789' } },
 ]
 
 const authListeners = new Set()
@@ -324,18 +326,26 @@ const mockAuth = {
     }
   },
 
-  async signInWithPassword({ email, password }) {
+  async signInWithPassword({ email, phone, identifier, password }) {
+    const id = (identifier || email || phone || '').trim().toLowerCase()
     const customUsers = JSON.parse(localStorage.getItem('cw_custom_users') || '[]')
     const allUsers = [...DEMO_USERS, ...customUsers]
-    const found = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase())
+
+    const found = allUsers.find(u => {
+      if (u.email && u.email.toLowerCase() === id) return true
+      if (u.phone && normalizePhone(u.phone) === normalizePhone(id)) return true
+      if (u.user_metadata?.phone && normalizePhone(u.user_metadata.phone) === normalizePhone(id)) return true
+      return false
+    })
 
     if (!found || (found.password && found.password !== password)) {
-      return { data: { user: null, session: null }, error: { message: 'Invalid login credentials' } }
+      return { data: { user: null, session: null }, error: { message: 'Invalid email/phone or password' } }
     }
 
     const sessionUser = {
       id: found.id,
       email: found.email,
+      phone: found.phone || found.user_metadata?.phone,
       user_metadata: found.user_metadata,
       app_metadata: { provider: 'email' },
     }

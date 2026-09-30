@@ -9,10 +9,10 @@ import { useToast } from '../components/ui/Toast'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Mail, ArrowLeft, CheckCircle2 } from 'lucide-react'
+import { UserCheck, ArrowLeft, CheckCircle2 } from 'lucide-react'
 
 const schema = z.object({
-  email: z.string().email('Enter a valid email address'),
+  identifier: z.string().min(3, 'Enter your email or phone number'),
 })
 
 export function ForgotPassword() {
@@ -28,9 +28,9 @@ export function ForgotPassword() {
   const onSubmit = async (data) => {
     setLoading(true)
     try {
-      await resetPassword(data.email)
+      await resetPassword(data.identifier)
       setSent(true)
-      toast({ type: 'success', message: 'Reset instructions sent to your email' })
+      toast({ type: 'success', message: 'Reset instructions sent successfully' })
     } catch (err) {
       toast({ type: 'error', message: err.message || 'Failed to send reset link.' })
     } finally {
@@ -46,7 +46,7 @@ export function ForgotPassword() {
             Reset Your Password
           </h1>
           <p className="text-sm" style={{ color: 'var(--fg-muted)' }}>
-            Enter your staff email to receive a password reset link
+            Enter your staff email or phone number to receive reset instructions
           </p>
         </div>
 
@@ -59,7 +59,7 @@ export function ForgotPassword() {
                 </div>
                 <h3 className="font-semibold text-lg" style={{ color: 'var(--fg)' }}>Instructions Sent</h3>
                 <p className="text-sm" style={{ color: 'var(--fg-muted)' }}>
-                  If an account exists with that email, you will receive password reset instructions shortly.
+                  If an account exists with that email or phone, you will receive password reset instructions shortly.
                 </p>
                 <Link to="/login" className="inline-block mt-2 font-medium hover:underline text-sm" style={{ color: 'var(--brand)' }}>
                   Return to Sign In
@@ -68,12 +68,11 @@ export function ForgotPassword() {
             ) : (
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <Input
-                  label="Email Address"
-                  type="email"
-                  placeholder="you@curtainworld.ug"
-                  icon={<Mail className="h-4 w-4" />}
-                  error={errors.email?.message}
-                  {...register('email')}
+                  label="Email / Phone Number"
+                  placeholder="e.g. you@curtainworld.ug or 0772 000 000"
+                  icon={<UserCheck className="h-4 w-4" />}
+                  error={errors.identifier?.message}
+                  {...register('identifier')}
                 />
 
                 <Button type="submit" className="w-full h-11 text-base font-semibold" loading={loading}>

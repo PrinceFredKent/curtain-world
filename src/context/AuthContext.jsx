@@ -28,24 +28,30 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const signIn = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+  const signIn = async (identifier, password) => {
+    const isEmail = identifier.includes('@')
+    const credentials = isEmail
+      ? { email: identifier.trim(), password }
+      : { phone: identifier.trim(), identifier: identifier.trim(), password }
+
+    const { data, error } = await supabase.auth.signInWithPassword(credentials)
     if (error) throw error
     setUser(data.user)
     return data
   }
 
-  const signUp = async ({ email, password, fullName, role = 'employee' }) => {
+  const signUp = async ({ email, phone, identifier, password, fullName, role = 'employee' }) => {
+    const userEmail = email || (identifier?.includes('@') ? identifier : `${(identifier || phone || fullName).replace(/\s+/g, '').toLowerCase()}@curtainworld.ug`)
+    const userPhone = phone || (!identifier?.includes('@') ? identifier : undefined)
+
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: userEmail,
       password,
       options: {
         data: {
           full_name: fullName,
           role,
+          phone: userPhone,
         },
       },
     })

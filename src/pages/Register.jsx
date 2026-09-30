@@ -10,11 +10,11 @@ import { useToast } from '../components/ui/Toast'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Lock, Mail, User, ShieldCheck } from 'lucide-react'
+import { Lock, UserCheck, User, ShieldCheck } from 'lucide-react'
 
 const registerSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
-  email: z.string().email('Enter a valid email address'),
+  identifier: z.string().min(3, 'Enter a valid email or phone number'),
   role: z.enum(['employee', 'cashier', 'both']),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string().min(6, 'Confirm your password'),
@@ -33,7 +33,7 @@ export function Register() {
     resolver: zodResolver(registerSchema),
     defaultValues: {
       fullName: '',
-      email: '',
+      identifier: '',
       role: 'employee',
       password: '',
       confirmPassword: '',
@@ -44,7 +44,7 @@ export function Register() {
     setLoading(true)
     try {
       await signUp({
-        email: data.email,
+        identifier: data.identifier,
         password: data.password,
         fullName: data.fullName,
         role: data.role,
@@ -93,12 +93,11 @@ export function Register() {
               />
 
               <Input
-                label="Staff Email *"
-                type="email"
-                placeholder="denis@curtainworld.ug"
-                icon={<Mail className="h-4 w-4" />}
-                error={errors.email?.message}
-                {...register('email')}
+                label="Email / Phone Number *"
+                placeholder="e.g. denis@curtainworld.ug or 0772 000 000"
+                icon={<UserCheck className="h-4 w-4" />}
+                error={errors.identifier?.message}
+                {...register('identifier')}
               />
 
               <Select label="Staff Role *" error={errors.role?.message} {...register('role')}>

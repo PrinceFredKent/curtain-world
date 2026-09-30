@@ -9,7 +9,7 @@ import {
 } from './demoData'
 
 const envUrl = import.meta.env.VITE_SUPABASE_URL
-const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 
 export const isLiveSupabase = Boolean(
   envUrl &&

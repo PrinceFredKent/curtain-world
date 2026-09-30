@@ -1,0 +1,95 @@
+// src/pages/ForgotPassword.jsx
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Card, CardContent } from '../components/ui/Card'
+import { useToast } from '../components/ui/Toast'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { Mail, ArrowLeft, CheckCircle2 } from 'lucide-react'
+
+const schema = z.object({
+  email: z.string().email('Enter a valid email address'),
+})
+
+export function ForgotPassword() {
+  const [loading, setLoading] = useState(false)
+  const [sent, setSent] = useState(false)
+  const { resetPassword } = useAuth()
+  const toast = useToast()
+
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    resolver: zodResolver(schema),
+  })
+
+  const onSubmit = async (data) => {
+    setLoading(true)
+    try {
+      await resetPassword(data.email)
+      setSent(true)
+      toast({ type: 'success', message: 'Reset instructions sent to your email' })
+    } catch (err) {
+      toast({ type: 'error', message: err.message || 'Failed to send reset link.' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--bg)', color: 'var(--fg)' }}>
+      <div className="w-full max-w-md space-y-6">
+        <div className="text-center space-y-2">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight" style={{ color: 'var(--fg)' }}>
+            Reset Your Password
+          </h1>
+          <p className="text-sm" style={{ color: 'var(--fg-muted)' }}>
+            Enter your staff email to receive a password reset link
+          </p>
+        </div>
+
+        <Card className="shadow-lg border" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+          <CardContent className="p-6 sm:p-8 space-y-5">
+            {sent ? (
+              <div className="text-center space-y-4 py-4">
+                <div className="h-12 w-12 rounded-full mx-auto flex items-center justify-center bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300">
+                  <CheckCircle2 className="h-6 w-6" />
+                </div>
+                <h3 className="font-semibold text-lg" style={{ color: 'var(--fg)' }}>Instructions Sent</h3>
+                <p className="text-sm" style={{ color: 'var(--fg-muted)' }}>
+                  If an account exists with that email, you will receive password reset instructions shortly.
+                </p>
+                <Link to="/login" className="inline-block mt-2 font-medium hover:underline text-sm" style={{ color: 'var(--brand)' }}>
+                  Return to Sign In
+                </Link>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                <Input
+                  label="Email Address"
+                  type="email"
+                  placeholder="you@curtainworld.ug"
+                  icon={<Mail className="h-4 w-4" />}
+                  error={errors.email?.message}
+                  {...register('email')}
+                />
+
+                <Button type="submit" className="w-full h-11 text-base font-semibold" loading={loading}>
+                  Send Reset Link
+                </Button>
+
+                <div className="pt-2 text-center">
+                  <Link to="/login" className="text-sm font-medium hover:underline inline-flex items-center gap-1.5" style={{ color: 'var(--brand)' }}>
+                    <ArrowLeft className="h-4 w-4" /> Back to Sign In
+                  </Link>
+                </div>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}

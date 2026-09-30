@@ -17,6 +17,8 @@ import { z } from 'zod'
 import { Plus, Trash2, Search, Package } from 'lucide-react'
 import { formatCurrency, formatDate } from '../lib/utils'
 
+import { useAuth } from '../context/AuthContext'
+
 const itemSchema = z.object({
   item_name: z.string().min(1, 'Item name required'),
   quantity: z.coerce.number().positive('Must be positive'),
@@ -34,14 +36,23 @@ const orderSchema = z.object({
 function CreateOrderModal({ open, onClose }) {
   const toast = useToast()
   const navigate = useNavigate()
+  const { user, fullName } = useAuth()
   const { data: customers } = useCustomers('')
   const { data: employees } = useStaff('employee')
   const { data: cashiers } = useStaff('cashier')
   const createOrder = useCreateOrder()
 
+  const matchedEmployee = employees?.find(e => e.id === user?.id || e.name === fullName)
+
   const { register, control, handleSubmit, watch, formState: { errors } } = useForm({
     resolver: zodResolver(orderSchema),
-    defaultValues: { items: [{ item_name: '', quantity: 1, unit_price: 0 }] },
+    values: {
+      items: [{ item_name: '', quantity: 1, unit_price: 0 }],
+      employee_id: matchedEmployee?.id || '',
+      cashier_id: '',
+      customer_id: '',
+      notes: '',
+    },
   })
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })

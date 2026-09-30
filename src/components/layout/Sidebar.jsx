@@ -2,9 +2,11 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Users, ShoppingBag, ArrowUpDown,
-  BarChart3, UserCog, Menu, X
+  BarChart3, UserCog, Menu, X, LogOut
 } from 'lucide-react'
 import { useState } from 'react'
+import { useAuth } from '../../context/AuthContext'
+import { Badge } from '../ui/Badge'
 import { cn } from '../../lib/utils'
 
 const navItems = [
@@ -18,6 +20,19 @@ const navItems = [
 
 export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { user, fullName, role, signOut } = useAuth()
+
+  const roleLabel = {
+    employee: 'Sales',
+    cashier: 'Cashier',
+    both: 'Sales & Cashier',
+  }[role] || 'Staff'
+
+  const roleBadgeVariant = {
+    employee: 'blue',
+    cashier: 'green',
+    both: 'purple',
+  }[role] || 'default'
 
   return (
     <>
@@ -50,12 +65,11 @@ export function Sidebar() {
       >
         {/* Brand */}
         <div
-          className="px-6 py-7 border-b"
+          className="px-6 py-6 border-b"
           style={{ borderColor: 'var(--border)' }}
         >
-          {/* Purple gradient pill logo */}
           <div
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg mb-3"
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-lg mb-2.5"
             style={{ background: 'var(--brand-light)' }}
           >
             <span
@@ -112,13 +126,43 @@ export function Sidebar() {
           ))}
         </nav>
 
-        {/* Footer */}
-        <div
-          className="px-6 py-4 border-t"
-          style={{ borderColor: 'var(--border)', color: 'var(--fg-subtle)' }}
-        >
-          <p className="text-xs">© {new Date().getFullYear()} Curtain World</p>
-        </div>
+        {/* Staff Profile & Logout */}
+        {user && (
+          <div
+            className="p-3 border-t m-2 rounded-xl border flex flex-col gap-2.5"
+            style={{ background: 'var(--surface-hover)', borderColor: 'var(--border)' }}
+          >
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div
+                  className="h-9 w-9 rounded-full flex items-center justify-center font-bold text-sm shrink-0"
+                  style={{ background: 'var(--brand-light)', color: 'var(--brand)' }}
+                >
+                  {fullName?.charAt(0).toUpperCase() || 'U'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold truncate" style={{ color: 'var(--fg)' }}>
+                    {fullName}
+                  </p>
+                  <div className="mt-0.5">
+                    <Badge variant={roleBadgeVariant} className="text-[10px] px-1.5 py-0">
+                      {roleLabel}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => signOut()}
+                className="p-1.5 rounded-lg transition-colors text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 shrink-0"
+                title="Sign Out"
+                aria-label="Sign Out"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </aside>
     </>
   )

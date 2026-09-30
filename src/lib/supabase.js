@@ -293,12 +293,132 @@ class MockQueryBuilder {
   }
 }
 
+const DEMO_USERS = [
+  { id: '11111111-1111-1111-1111-111111111111', email: 'mukasa@curtainworld.ug', password: 'password123', user_metadata: { full_name: 'Mukasa Joseph', role: 'employee' } },
+  { id: '22222222-2222-2222-2222-222222222222', email: 'nakato@curtainworld.ug', password: 'password123', user_metadata: { full_name: 'Nakato Sarah', role: 'cashier' } },
+  { id: '33333333-3333-3333-3333-333333333333', email: 'okello@curtainworld.ug', password: 'password123', user_metadata: { full_name: 'Okello Brian', role: 'both' } },
+]
+
+const authListeners = new Set()
+
+const mockAuth = {
+  async getSession() {
+    const raw = localStorage.getItem('cw_auth_session')
+    if (!raw) return { data: { session: null }, error: null }
+    try {
+      const user = JSON.parse(raw)
+      return { data: { session: { user, access_token: 'mock_token' } }, error: null }
+    } catch {
+      return { data: { session: null }, error: null }
+    }
+  },
+
+  async getUser() {
+    const raw = localStorage.getItem('cw_auth_session')
+    if (!raw) return { data: { user: null }, error: null }
+    try {
+      const user = JSON.parse(raw)
+      return { data: { user }, error: null }
+    } catch {
+      return { data: { user: null }, error: null }
+    }
+  },
+
+  async signInWithPassword({ email, password }) {
+    const customUsers = JSON.parse(localStorage.getItem('cw_custom_users') || '[]')
+    const allUsers = [...DEMO_USERS, ...customUsers]
+    const found = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase())
+
+    if (!found || (found.password && found.password !== password)) {
+      return { data: { user: null, session: null }, error: { message: 'Invalid login credentials' } }
+    }
+
+    const sessionUser = {
+      id: found.id,
+      email: found.email,
+      user_metadata: found.user_metadata,
+      app_metadata: { provider: 'email' },
+    }
+    localStorage.setItem('cw_auth_session', JSON.stringify(sessionUser))
+    authListeners.forEach(cb => cb('SIGNED_IN', { user: sessionUser }))
+    return { data: { user: sessionUser, session: { user: sessionUser } }, error: null }
+  },
+
+  async signUp({ email, password, options = {} }) {
+    const customUsers = JSON.parse(localStorage.getItem('cw_custom_users') || '[]')
+    const allUsers = [...DEMO_USERS, ...customUsers]
+    if (allUsers.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+      return { data: { user: null, session: null }, error: { message: 'User already registered' } }
+    }
+
+    const newUser = {
+      id: generateUUID(),
+      email,
+      password,
+      user_metadata: options.data || { full_name: email.split('@')[0], role: 'employee' },
+    }
+
+    customUsers.push(newUser)
+    localStorage.setItem('cw_custom_users', JSON.stringify(customUsers))
+
+    // Also register in mock staff table if not present
+    const staffStorage = mockTables.staff
+    const currentStaff = staffStorage.getAll()
+    if (!currentStaff.some(s => s.name === newUser.user_metadata.full_name)) {
+      currentStaff.push({
+        id: newUser.id,
+        name: newUser.user_metadata.full_name,
+        role: newUser.user_metadata.role || 'employee',
+        active: true,
+        created_at: new Date().toISOString(),
+      })
+      staffStorage.saveAll(currentStaff)
+    }
+
+    const sessionUser = {
+      id: newUser.id,
+      email: newUser.email,
+      user_metadata: newUser.user_metadata,
+      app_metadata: { provider: 'email' },
+    }
+    localStorage.setItem('cw_auth_session', JSON.stringify(sessionUser))
+    authListeners.forEach(cb => cb('SIGNED_IN', { user: sessionUser }))
+    return { data: { user: sessionUser, session: { user: sessionUser } }, error: null }
+  },
+
+  async signOut() {
+    localStorage.removeItem('cw_auth_session')
+    authListeners.forEach(cb => cb('SIGNED_OUT', null))
+    return { error: null }
+  },
+
+  async resetPasswordForEmail(email) {
+    return { data: {}, error: null }
+  },
+
+  onAuthStateChange(callback) {
+    authListeners.add(callback)
+    this.getSession().then(({ data }) => {
+      if (data.session) callback('INITIAL_SESSION', data.session)
+    })
+    return {
+      data: {
+        subscription: {
+          unsubscribe: () => authListeners.delete(callback),
+        },
+      },
+    }
+  },
+}
+
 const mockSupabase = {
   from(table) {
     return new MockQueryBuilder(table)
-  }
+  },
+  auth: mockAuth,
 }
 
 export const supabase = isLiveSupabase
   ? createClient(envUrl, envKey)
   : mockSupabase
+

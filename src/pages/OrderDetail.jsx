@@ -18,6 +18,8 @@ import { ArrowLeft, Plus, Download, Trash2, DollarSign } from 'lucide-react'
 import { formatCurrency, formatDateTime, formatDate, getPaymentMethodLabel } from '../lib/utils'
 import { generateReceiptPDF, downloadPDF } from '../lib/pdf'
 
+import { useAuth } from '../context/AuthContext'
+
 const paymentSchema = z.object({
   amount: z.coerce.number().positive('Amount must be positive'),
   type: z.enum(['deposit', 'payment']),
@@ -29,16 +31,22 @@ const paymentSchema = z.object({
 
 function AddPaymentModal({ open, onClose, order, defaultType = 'payment' }) {
   const toast = useToast()
+  const { user, fullName } = useAuth()
   const { data: cashiers } = useStaff('cashier')
   const { data: employees } = useStaff('employee')
   const createTxn = useCreateTransaction()
 
+  const matchedCashier = cashiers?.find(c => c.id === user?.id || c.name === fullName)
+
   const { register, handleSubmit, formState: { errors }, reset } = useForm({
     resolver: zodResolver(paymentSchema),
-    defaultValues: {
+    values: {
       type: defaultType,
       payment_method: 'momo',
       amount: order?.balance ?? '',
+      cashier_id: matchedCashier?.id || order?.cashier_id || '',
+      employee_id: order?.employee_id || '',
+      notes: '',
     },
   })
 

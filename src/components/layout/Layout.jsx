@@ -1,5 +1,7 @@
 // src/components/layout/Layout.jsx
 import { Sidebar } from './Sidebar'
+import { BottomNav } from './BottomNav'
+import { MobileTopBar } from './MobileTopBar'
 import { Outlet } from 'react-router-dom'
 import { isLiveSupabase } from '../../lib/supabase'
 import { Sparkles, X } from 'lucide-react'
@@ -13,13 +15,18 @@ export function Layout() {
 
   return (
     <div className="flex min-h-screen" style={{ background: 'var(--bg)', color: 'var(--fg)' }}>
+      {/* Sidebar handles both desktop fixed mode and mobile slide-in drawer mode */}
       <Sidebar />
+
       <main
         className={cn(
-          'flex-1 min-h-screen flex flex-col liquid-main',
+          'flex-1 min-h-screen flex flex-col liquid-main pb-20 md:pb-0',
           collapsed ? 'md:ml-20' : 'md:ml-64'
         )}
       >
+        {/* Mobile Top Header (brand + hamburger drawer trigger + profile) */}
+        <MobileTopBar />
+
         {showBanner && (
           <div
             className="px-4 py-2 text-xs flex items-center justify-between border-b"
@@ -40,11 +47,13 @@ export function Layout() {
             </button>
           </div>
         )}
-        <div className="p-6 lg:p-8 flex-1">
+        <div className="p-4 sm:p-6 lg:p-8 flex-1">
           <Outlet />
         </div>
       </main>
+
+      {/* Clean 4-item Mobile Bottom Nav with More trigger */}
+      <BottomNav />
     </div>
   )
 }
-

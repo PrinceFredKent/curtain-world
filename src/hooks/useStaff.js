@@ -18,7 +18,8 @@ export function useStaff(roleFilter = null) {
 
       const { data, error } = await query
       if (error) throw error
-      return data
+      // Only return active, verified staff who have an assigned role
+      return (data || []).filter(s => (s.verified !== false) && s.role && s.role !== 'pending')
     },
   })
 }
@@ -43,7 +44,37 @@ export function useCreateStaff() {
     mutationFn: async (staff) => {
       const { data, error } = await supabase
         .from('staff')
-        .insert(staff)
+        .insert({
+          ...staff,
+          verified: true,
+          active: true,
+          status: 'active',
+        })
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staff'] })
+      queryClient.invalidateQueries({ queryKey: ['staff-all'] })
+    },
+  })
+}
+
+export function useVerifyStaff() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, role }) => {
+      const { data, error } = await supabase
+        .from('staff')
+        .update({
+          role,
+          verified: true,
+          active: true,
+          status: 'active',
+        })
+        .eq('id', id)
         .select()
         .single()
       if (error) throw error
@@ -82,7 +113,7 @@ export function useDeleteStaff() {
     mutationFn: async (id) => {
       const { error } = await supabase
         .from('staff')
-        .update({ active: false })
+        .delete()
         .eq('id', id)
       if (error) throw error
     },
@@ -92,3 +123,21 @@ export function useDeleteStaff() {
     },
   })
 }
+
+export function useRejectStaff() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id) => {
+      const { error } = await supabase
+        .from('staff')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staff'] })
+      queryClient.invalidateQueries({ queryKey: ['staff-all'] })
+    },
+  })
+}
+

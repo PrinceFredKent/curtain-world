@@ -9,21 +9,16 @@ import { useToast } from '../components/ui/Toast'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Lock, UserCheck, Eye, EyeOff, Sparkles } from 'lucide-react'
+import { Lock, UserCheck } from 'lucide-react'
+
+import { SUPER_ADMIN_EMAIL } from '../lib/supabase'
 
 const loginSchema = z.object({
   identifier: z.string().min(3, 'Enter your email or phone number'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 })
 
-const QUICK_DEMO_ACCOUNTS = [
-  { name: 'Mukasa Joseph', role: 'Sales Employee', identifier: '0772345678', display: '0772 345 678' },
-  { name: 'Nakato Sarah', role: 'Cashier', identifier: '0701987654', display: '0701 987 654' },
-  { name: 'Okello Brian', role: 'Manager / Both', identifier: 'okello@curtainworld.ug', display: 'okello@curtainworld.ug' },
-]
-
 export function Login() {
-  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const { signIn } = useAuth()
   const navigate = useNavigate()
@@ -32,7 +27,7 @@ export function Login() {
 
   const from = location.state?.from?.pathname || '/'
 
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm({
+  const { register, handleSubmit, formState: { errors } } = useForm({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       identifier: '',
@@ -43,20 +38,22 @@ export function Login() {
   const onSubmit = async (data) => {
     setLoading(true)
     try {
-      await signIn(data.identifier, data.password)
-      toast({ type: 'success', message: 'Welcome back to Curtain World!' })
+      const res = await signIn(data.identifier, data.password)
+      const user = res?.user || res?.data?.user
+      const isSuper = (user?.email || '').toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()
+      const isVerified = isSuper || (user?.user_metadata?.verified === true && user?.user_metadata?.role)
+
+      if (isVerified) {
+        toast({ type: 'success', message: 'Welcome back to Curtain World!' })
+      } else {
+        toast({ type: 'info', message: 'Account logged in. Waiting verification by the super admin.' })
+      }
       navigate(from, { replace: true })
     } catch (err) {
       toast({ type: 'error', message: err.message || 'Login failed. Check your email/phone and password.' })
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleQuickLogin = (id) => {
-    setValue('identifier', id)
-    setValue('password', 'password123')
-    onSubmit({ identifier: id, password: 'password123' })
   }
 
   return (
@@ -93,8 +90,8 @@ export function Login() {
                 {...register('identifier')}
               />
 
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-1">
                   <label className="block text-sm font-medium" style={{ color: 'var(--fg)' }}>Password</label>
                   <Link
                     to="/forgot-password"
@@ -104,32 +101,13 @@ export function Login() {
                     Forgot password?
                   </Link>
                 </div>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--fg-subtle)' }}>
-                    <Lock className="h-4 w-4" />
-                  </div>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    className="w-full rounded-lg border px-3 py-2 pl-9 pr-10 text-sm transition-colors focus:outline-none focus:ring-2"
-                    style={{
-                      background: 'var(--surface)',
-                      color: 'var(--fg)',
-                      borderColor: errors.password ? '#ef4444' : 'var(--border)',
-                    }}
-                    {...register('password')}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded opacity-60 hover:opacity-100 transition-opacity"
-                    style={{ color: 'var(--fg-muted)' }}
-                    tabIndex={-1}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-                {errors.password && <p className="text-xs text-red-500">{errors.password.message}</p>}
+                <Input
+                  type="password"
+                  placeholder="••••••••"
+                  icon={<Lock className="h-4 w-4" />}
+                  error={errors.password?.message}
+                  {...register('password')}
+                />
               </div>
 
               <Button type="submit" className="w-full h-11 text-base font-semibold" loading={loading}>
@@ -145,37 +123,6 @@ export function Login() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Quick Demo Staff Logins */}
-        <div
-          className="rounded-xl p-4 border space-y-2.5 text-xs"
-          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-        >
-          <div className="flex items-center gap-1.5 font-semibold" style={{ color: 'var(--fg)' }}>
-            <Sparkles className="h-3.5 w-3.5" style={{ color: 'var(--brand)' }} />
-            <span>Quick Staff Switch / Demo Logins:</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {QUICK_DEMO_ACCOUNTS.map(acc => (
-              <button
-                key={acc.identifier}
-                type="button"
-                onClick={() => handleQuickLogin(acc.identifier)}
-                className="text-left p-2 rounded-lg border transition-all text-xs flex flex-col justify-between"
-                style={{
-                  background: 'var(--surface-hover)',
-                  borderColor: 'var(--border)',
-                }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--brand)'}
-                onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-              >
-                <span className="font-medium" style={{ color: 'var(--fg)' }}>{acc.name}</span>
-                <span className="text-[10px] opacity-70" style={{ color: 'var(--fg-muted)' }}>{acc.display}</span>
-                <span className="text-[10px] font-semibold mt-1" style={{ color: 'var(--brand)' }}>{acc.role}</span>
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   )

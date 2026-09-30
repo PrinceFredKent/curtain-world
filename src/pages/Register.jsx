@@ -4,18 +4,16 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
-import { Select } from '../components/ui/Select'
 import { Card, CardContent } from '../components/ui/Card'
 import { useToast } from '../components/ui/Toast'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Lock, UserCheck, User, ShieldCheck } from 'lucide-react'
+import { Lock, UserCheck, User } from 'lucide-react'
 
 const registerSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
   identifier: z.string().min(3, 'Enter a valid email or phone number'),
-  role: z.enum(['employee', 'cashier', 'both']),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string().min(6, 'Confirm your password'),
 }).refine(data => data.password === data.confirmPassword, {
@@ -34,7 +32,6 @@ export function Register() {
     defaultValues: {
       fullName: '',
       identifier: '',
-      role: 'employee',
       password: '',
       confirmPassword: '',
     },
@@ -47,9 +44,8 @@ export function Register() {
         identifier: data.identifier,
         password: data.password,
         fullName: data.fullName,
-        role: data.role,
       })
-      toast({ type: 'success', message: 'Account created! Welcome to Curtain World.' })
+      toast({ type: 'success', message: 'Registration received! Awaiting super admin verification.' })
       navigate('/', { replace: true })
     } catch (err) {
       toast({ type: 'error', message: err.message || 'Registration failed.' })
@@ -100,12 +96,6 @@ export function Register() {
                 {...register('identifier')}
               />
 
-              <Select label="Staff Role *" error={errors.role?.message} {...register('role')}>
-                <option value="employee">Sales Employee (Measurements & Orders)</option>
-                <option value="cashier">Cashier (Deposits & Payments)</option>
-                <option value="both">Both (Sales & Cashier)</option>
-              </Select>
-
               <Input
                 label="Password *"
                 type="password"
@@ -125,7 +115,7 @@ export function Register() {
               />
 
               <Button type="submit" className="w-full h-11 text-base font-semibold" loading={loading}>
-                Create Staff Account
+                Register Account
               </Button>
             </form>
 
@@ -141,3 +131,4 @@ export function Register() {
     </div>
   )
 }
+

@@ -40,12 +40,105 @@ class LocalStorageTable {
   }
 }
 
+export const SUPER_ADMIN_EMAIL = 'sharityra41@gmail.com'
+
+export function syncStaffUpdateToAuth(staffRec) {
+  if (!staffRec) return
+  try {
+    const customUsers = JSON.parse(localStorage.getItem('cw_custom_users') || '[]')
+    let userChanged = false
+    const nextUsers = customUsers.map(u => {
+      const isMatch = (staffRec.id && u.id === staffRec.id) ||
+                      (staffRec.email && u.email && u.email.toLowerCase() === staffRec.email.toLowerCase()) ||
+                      (staffRec.name && u.user_metadata?.full_name === staffRec.name)
+      if (isMatch) {
+        userChanged = true
+        return {
+          ...u,
+          user_metadata: {
+            ...u.user_metadata,
+            role: staffRec.role,
+            verified: Boolean(staffRec.verified),
+            status: staffRec.status || (staffRec.verified ? 'active' : 'pending_verification'),
+          }
+        }
+      }
+      return u
+    })
+    if (userChanged) {
+      localStorage.setItem('cw_custom_users', JSON.stringify(nextUsers))
+    }
+
+    const sessionRaw = localStorage.getItem('cw_auth_session')
+    if (sessionRaw) {
+      const sessionUser = JSON.parse(sessionRaw)
+      const isMatch = (staffRec.id && sessionUser.id === staffRec.id) ||
+                      (staffRec.email && sessionUser.email && sessionUser.email.toLowerCase() === staffRec.email.toLowerCase()) ||
+                      (staffRec.name && sessionUser.user_metadata?.full_name === staffRec.name)
+      if (isMatch) {
+        const updatedSession = {
+          ...sessionUser,
+          user_metadata: {
+            ...sessionUser.user_metadata,
+            role: staffRec.role,
+            verified: Boolean(staffRec.verified),
+            status: staffRec.status || (staffRec.verified ? 'active' : 'pending_verification'),
+          }
+        }
+        localStorage.setItem('cw_auth_session', JSON.stringify(updatedSession))
+        authListeners.forEach(cb => cb('USER_UPDATED', { user: updatedSession }))
+      }
+    }
+  } catch (err) {
+    console.error('Error syncing staff update to auth:', err)
+  }
+}
+
 const mockTables = {
   staff: new LocalStorageTable('staff', INITIAL_STAFF),
   customers: new LocalStorageTable('customers', INITIAL_CUSTOMERS),
   orders: new LocalStorageTable('orders', INITIAL_ORDERS),
   order_items: new LocalStorageTable('order_items', INITIAL_ITEMS),
   transactions: new LocalStorageTable('transactions', INITIAL_TRANSACTIONS),
+}
+
+// Ensure Super Admin and initial pending member exist in staff table if table was pre-initialized
+try {
+  const staffList = mockTables.staff.getAll()
+  let changed = false
+  if (!staffList.some(s => (s.email || '').toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase())) {
+    staffList.unshift({
+      id: '00000000-0000-0000-0000-000000000000',
+      name: 'Sharity (Super Admin)',
+      email: SUPER_ADMIN_EMAIL,
+      phone: '+256 700 000 001',
+      role: 'super_admin',
+      active: true,
+      verified: true,
+      status: 'active',
+      created_at: new Date(Date.now() - 60 * 86400000).toISOString(),
+    })
+    changed = true
+  }
+  if (!staffList.some(s => (s.email || '').toLowerCase() === 'kigozi@curtainworld.ug')) {
+    staffList.push({
+      id: '44444444-4444-4444-4444-444444444444',
+      name: 'Kigozi Peter',
+      email: 'kigozi@curtainworld.ug',
+      phone: '+256 702 334 455',
+      role: null,
+      active: false,
+      verified: false,
+      status: 'pending_verification',
+      created_at: new Date(Date.now() - 2 * 3600000).toISOString(),
+    })
+    changed = true
+  }
+  if (changed) {
+    mockTables.staff.saveAll(staffList)
+  }
+} catch {
+  // Ignore
 }
 
 function generateUUID() {
@@ -65,6 +158,8 @@ class MockQueryBuilder {
     this.singleMode = false
     this.countMode = null
     this.isHead = false
+    this.pendingUpdate = null
+    this.pendingDelete = false
   }
 
   select(query = '*', options = {}) {
@@ -130,6 +225,58 @@ class MockQueryBuilder {
   async _resolveData() {
     const storage = mockTables[this.table]
     if (!storage) return { data: [], error: null, count: 0 }
+
+    // If a pending update is queued, apply to records matching filters
+    if (this.pendingUpdate) {
+      const current = storage.getAll()
+      let updatedRecords = []
+      const next = current.map(item => {
+        const match = this.filters.length === 0 || this.filters.every(f => f(item))
+        if (match) {
+          const rec = { ...item, ...this.pendingUpdate, updated_at: new Date().toISOString() }
+          if (this.table === 'orders' && this.pendingUpdate.total_amount !== undefined) {
+            rec.balance = Number(rec.total_amount) - Number(rec.deposit || 0)
+          }
+          updatedRecords.push(rec)
+          return rec
+        }
+        return item
+      })
+      storage.saveAll(next)
+
+      if (this.table === 'staff') {
+        for (const staffRec of updatedRecords) {
+          syncStaffUpdateToAuth(staffRec)
+        }
+      }
+
+      const data = this.singleMode ? (updatedRecords[0] || null) : updatedRecords
+      return { data, error: null }
+    }
+
+    // If a pending delete is queued
+    if (this.pendingDelete) {
+      const current = storage.getAll()
+      const deletedItems = []
+      const next = current.filter(item => {
+        const match = this.filters.length > 0 && this.filters.every(f => f(item))
+        if (match) deletedItems.push(item)
+        return !match
+      })
+      storage.saveAll(next)
+
+      if (this.table === 'staff') {
+        try {
+          const customUsers = JSON.parse(localStorage.getItem('cw_custom_users') || '[]')
+          const filteredUsers = customUsers.filter(u => !deletedItems.some(d => d.id === u.id || (d.email && d.email.toLowerCase() === u.email?.toLowerCase())))
+          localStorage.setItem('cw_custom_users', JSON.stringify(filteredUsers))
+        } catch {
+          // ignore
+        }
+      }
+
+      return { data: null, error: null }
+    }
 
     let records = [...storage.getAll()]
 
@@ -249,56 +396,85 @@ class MockQueryBuilder {
     }
   }
 
-  async update(updates) {
-    const storage = mockTables[this.table]
-    const current = storage.getAll()
-    let updatedRecord = null
-
-    const next = current.map(item => {
-      const match = this.filters.every(f => f(item))
-      if (match) {
-        updatedRecord = { ...item, ...updates, updated_at: new Date().toISOString() }
-        if (this.table === 'orders' && updates.total_amount !== undefined) {
-          updatedRecord.balance = Number(updatedRecord.total_amount) - Number(updatedRecord.deposit || 0)
-        }
-        return updatedRecord
-      }
-      return item
-    })
-
-    storage.saveAll(next)
-
-    return {
-      eq: () => this,
-      select: () => ({
-        single: async () => ({ data: updatedRecord, error: null }),
-        then: (resolve) => resolve({ data: updatedRecord, error: null }),
-      }),
-      then: (resolve) => resolve({ data: updatedRecord, error: null }),
-    }
+  update(updates) {
+    this.pendingUpdate = updates
+    return this
   }
 
-  async delete() {
-    const storage = mockTables[this.table]
-    const current = storage.getAll()
-    const next = current.filter(item => !this.filters.every(f => f(item)))
-    storage.saveAll(next)
-    return {
-      eq: (col, val) => {
-        this.eq(col, val)
-        return this.delete()
-      },
-      then: (resolve) => resolve({ error: null }),
-    }
+  delete() {
+    this.pendingDelete = true
+    return this
   }
 }
 
 const normalizePhone = (p) => (p || '').replace(/\D/g, '').slice(-9)
 
 const DEMO_USERS = [
-  { id: '11111111-1111-1111-1111-111111111111', email: 'mukasa@curtainworld.ug', phone: '0772345678', password: 'password123', user_metadata: { full_name: 'Mukasa Joseph', role: 'employee', phone: '+256 772 345 678' } },
-  { id: '22222222-2222-2222-2222-222222222222', email: 'nakato@curtainworld.ug', phone: '0701987654', password: 'password123', user_metadata: { full_name: 'Nakato Sarah', role: 'cashier', phone: '+256 701 987 654' } },
-  { id: '33333333-3333-3333-3333-333333333333', email: 'okello@curtainworld.ug', phone: '0752456789', password: 'password123', user_metadata: { full_name: 'Okello Brian', role: 'both', phone: '+256 752 456 789' } },
+  {
+    id: '00000000-0000-0000-0000-000000000000',
+    email: 'sharityra41@gmail.com',
+    phone: '0700000001',
+    password: 'password123',
+    user_metadata: {
+      full_name: 'Sharity (Super Admin)',
+      role: 'super_admin',
+      phone: '+256 700 000 001',
+      verified: true,
+      status: 'active',
+    },
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111111',
+    email: 'mukasa@curtainworld.ug',
+    phone: '0772345678',
+    password: 'password123',
+    user_metadata: {
+      full_name: 'Mukasa Joseph',
+      role: 'employee',
+      phone: '+256 772 345 678',
+      verified: true,
+      status: 'active',
+    },
+  },
+  {
+    id: '22222222-2222-2222-2222-222222222222',
+    email: 'nakato@curtainworld.ug',
+    phone: '0701987654',
+    password: 'password123',
+    user_metadata: {
+      full_name: 'Nakato Sarah',
+      role: 'cashier',
+      phone: '+256 701 987 654',
+      verified: true,
+      status: 'active',
+    },
+  },
+  {
+    id: '33333333-3333-3333-3333-333333333333',
+    email: 'okello@curtainworld.ug',
+    phone: '0752456789',
+    password: 'password123',
+    user_metadata: {
+      full_name: 'Okello Brian',
+      role: 'both',
+      phone: '+256 752 456 789',
+      verified: true,
+      status: 'active',
+    },
+  },
+  {
+    id: '44444444-4444-4444-4444-444444444444',
+    email: 'kigozi@curtainworld.ug',
+    phone: '0702334455',
+    password: 'password123',
+    user_metadata: {
+      full_name: 'Kigozi Peter',
+      role: null,
+      phone: '+256 702 334 455',
+      verified: false,
+      status: 'pending_verification',
+    },
+  },
 ]
 
 const authListeners = new Set()
@@ -308,7 +484,45 @@ const mockAuth = {
     const raw = localStorage.getItem('cw_auth_session')
     if (!raw) return { data: { session: null }, error: null }
     try {
-      const user = JSON.parse(raw)
+      let user = JSON.parse(raw)
+      // Check if user metadata in cw_custom_users or cw_staff has been updated by super admin
+      const isSuper = (user.email || '').toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()
+      if (isSuper) {
+        user = {
+          ...user,
+          user_metadata: {
+            ...user.user_metadata,
+            role: 'super_admin',
+            verified: true,
+            status: 'active',
+          },
+        }
+      } else {
+        const customUsers = JSON.parse(localStorage.getItem('cw_custom_users') || '[]')
+        const matchingCustom = customUsers.find(u => u.id === user.id || (u.email && u.email.toLowerCase() === user.email?.toLowerCase()))
+        const staffList = mockTables.staff.getAll()
+        const matchingStaff = staffList.find(s => s.id === user.id || (s.email && s.email.toLowerCase() === user.email?.toLowerCase()))
+
+        if (matchingStaff) {
+          user = {
+            ...user,
+            user_metadata: {
+              ...user.user_metadata,
+              role: matchingStaff.role,
+              verified: Boolean(matchingStaff.verified),
+              status: matchingStaff.status || (matchingStaff.verified ? 'active' : 'pending_verification'),
+            },
+          }
+        } else if (matchingCustom) {
+          user = {
+            ...user,
+            user_metadata: {
+              ...user.user_metadata,
+              ...matchingCustom.user_metadata,
+            },
+          }
+        }
+      }
       return { data: { session: { user, access_token: 'mock_token' } }, error: null }
     } catch {
       return { data: { session: null }, error: null }
@@ -316,14 +530,8 @@ const mockAuth = {
   },
 
   async getUser() {
-    const raw = localStorage.getItem('cw_auth_session')
-    if (!raw) return { data: { user: null }, error: null }
-    try {
-      const user = JSON.parse(raw)
-      return { data: { user }, error: null }
-    } catch {
-      return { data: { user: null }, error: null }
-    }
+    const { data: { session } } = await this.getSession()
+    return { data: { user: session?.user ?? null }, error: null }
   },
 
   async signInWithPassword({ email, phone, identifier, password }) {
@@ -338,15 +546,67 @@ const mockAuth = {
       return false
     })
 
-    if (!found || (found.password && found.password !== password)) {
+    const isSuper = id === SUPER_ADMIN_EMAIL.toLowerCase() || (found?.email || '').toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()
+
+    if (!found) {
+      if (isSuper) {
+        // Automatically create and authenticate the designated super admin account
+        const superUser = {
+          id: '00000000-0000-0000-0000-000000000000',
+          email: SUPER_ADMIN_EMAIL,
+          phone: '+256 700 000 001',
+          password,
+          user_metadata: {
+            full_name: 'Sharity (Super Admin)',
+            role: 'super_admin',
+            phone: '+256 700 000 001',
+            verified: true,
+            status: 'active',
+          },
+        }
+        customUsers.push(superUser)
+        localStorage.setItem('cw_custom_users', JSON.stringify(customUsers))
+
+        const sessionUser = {
+          id: superUser.id,
+          email: superUser.email,
+          phone: superUser.phone,
+          user_metadata: superUser.user_metadata,
+          app_metadata: { provider: 'email' },
+        }
+        localStorage.setItem('cw_auth_session', JSON.stringify(sessionUser))
+        authListeners.forEach(cb => cb('SIGNED_IN', { user: sessionUser }))
+        return { data: { user: sessionUser, session: { user: sessionUser } }, error: null }
+      }
       return { data: { user: null, session: null }, error: { message: 'Invalid email/phone or password' } }
+    }
+
+    if (found.password && found.password !== password) {
+      return { data: { user: null, session: null }, error: { message: 'Invalid email/phone or password' } }
+    }
+
+    let meta = { ...found.user_metadata }
+
+    if (isSuper) {
+      meta.role = 'super_admin'
+      meta.verified = true
+      meta.status = 'active'
+    } else {
+      // Sync from cw_staff if present
+      const staffList = mockTables.staff.getAll()
+      const matchingStaff = staffList.find(s => s.id === found.id || (s.email && s.email.toLowerCase() === found.email?.toLowerCase()))
+      if (matchingStaff) {
+        meta.role = matchingStaff.role
+        meta.verified = Boolean(matchingStaff.verified)
+        meta.status = matchingStaff.status || (matchingStaff.verified ? 'active' : 'pending_verification')
+      }
     }
 
     const sessionUser = {
       id: found.id,
       email: found.email,
-      phone: found.phone || found.user_metadata?.phone,
-      user_metadata: found.user_metadata,
+      phone: found.phone || meta.phone,
+      user_metadata: meta,
       app_metadata: { provider: 'email' },
     }
     localStorage.setItem('cw_auth_session', JSON.stringify(sessionUser))
@@ -357,29 +617,53 @@ const mockAuth = {
   async signUp({ email, password, options = {} }) {
     const customUsers = JSON.parse(localStorage.getItem('cw_custom_users') || '[]')
     const allUsers = [...DEMO_USERS, ...customUsers]
-    if (allUsers.some(u => u.email.toLowerCase() === email.toLowerCase())) {
-      return { data: { user: null, session: null }, error: { message: 'User already registered' } }
+    const cleanEmail = (email || '').trim().toLowerCase()
+
+    if (allUsers.some(u => u.email.toLowerCase() === cleanEmail)) {
+      return { data: { user: null, session: null }, error: { message: 'User already registered with this email' } }
     }
+
+    const isSuper = cleanEmail === SUPER_ADMIN_EMAIL.toLowerCase()
+    const fullName = options.data?.full_name || email.split('@')[0]
+    const phone = options.data?.phone || ''
+
+    // Regular new staff registrations are pending verification with NO assigned role until admin sets it
+    const role = isSuper ? 'super_admin' : (options.data?.role || null)
+    const verified = isSuper ? true : Boolean(options.data?.verified || false)
+    const status = isSuper ? 'active' : (verified ? 'active' : 'pending_verification')
 
     const newUser = {
       id: generateUUID(),
-      email,
+      email: cleanEmail,
+      phone,
       password,
-      user_metadata: options.data || { full_name: email.split('@')[0], role: 'employee' },
+      user_metadata: {
+        full_name: fullName,
+        phone,
+        role,
+        verified,
+        status,
+        registered_at: new Date().toISOString(),
+      },
     }
 
     customUsers.push(newUser)
     localStorage.setItem('cw_custom_users', JSON.stringify(customUsers))
 
-    // Also register in mock staff table if not present
+    // Also register in mock staff table with pending status
     const staffStorage = mockTables.staff
     const currentStaff = staffStorage.getAll()
-    if (!currentStaff.some(s => s.name === newUser.user_metadata.full_name)) {
+    const existingStaffIdx = currentStaff.findIndex(s => (s.email && s.email.toLowerCase() === cleanEmail) || s.id === newUser.id)
+    if (existingStaffIdx === -1) {
       currentStaff.push({
         id: newUser.id,
-        name: newUser.user_metadata.full_name,
-        role: newUser.user_metadata.role || 'employee',
-        active: true,
+        name: fullName,
+        email: cleanEmail,
+        phone,
+        role,
+        active: isSuper,
+        verified,
+        status,
         created_at: new Date().toISOString(),
       })
       staffStorage.saveAll(currentStaff)
@@ -388,6 +672,7 @@ const mockAuth = {
     const sessionUser = {
       id: newUser.id,
       email: newUser.email,
+      phone: newUser.phone,
       user_metadata: newUser.user_metadata,
       app_metadata: { provider: 'email' },
     }

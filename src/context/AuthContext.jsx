@@ -1,12 +1,40 @@
 // src/context/AuthContext.jsx
-import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { supabase, SUPER_ADMIN_EMAIL } from '../lib/supabase'
 
 const AuthContext = createContext(null)
+
+export function isUserSuperAdmin(user) {
+  if (!user) return false
+  const email = (user.email || '').toLowerCase().trim()
+  const role = user.user_metadata?.role || user.role
+  return email === SUPER_ADMIN_EMAIL.toLowerCase() || role === 'super_admin'
+}
+
+export function isUserVerified(user) {
+  if (!user) return false
+  if (isUserSuperAdmin(user)) return true
+  const verified = user.user_metadata?.verified === true || user.verified === true
+  const role = user.user_metadata?.role || user.role
+  return Boolean(verified && role && role !== 'pending')
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  const refreshUser = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        setUser({ ...session.user })
+        return session.user
+      }
+    } catch (e) {
+      console.warn('Could not refresh user session:', e)
+    }
+    return null
+  }, [])
 
   useEffect(() => {
     // 1. Get initial session
@@ -40,18 +68,38 @@ export function AuthProvider({ children }) {
     return data
   }
 
-  const signUp = async ({ email, phone, identifier, password, fullName, role = 'employee' }) => {
-    const userEmail = email || (identifier?.includes('@') ? identifier : `${(identifier || phone || fullName).replace(/\s+/g, '').toLowerCase()}@curtainworld.ug`)
-    const userPhone = phone || (!identifier?.includes('@') ? identifier : undefined)
+  const signUp = async (firstArg, secondArg, thirdArg) => {
+    let email, phone, password, fullName, role
+
+    if (typeof firstArg === 'object' && firstArg !== null) {
+      email = firstArg.email || (firstArg.identifier?.includes('@') ? firstArg.identifier : `${(firstArg.identifier || firstArg.phone || firstArg.fullName).replace(/\s+/g, '').toLowerCase()}@curtainworld.ug`)
+      phone = firstArg.phone || (!firstArg.identifier?.includes('@') ? firstArg.identifier : undefined)
+      password = firstArg.password
+      fullName = firstArg.fullName || firstArg.full_name
+      role = firstArg.role
+    } else {
+      email = firstArg
+      password = secondArg
+      fullName = thirdArg?.full_name || thirdArg?.fullName
+      phone = thirdArg?.phone
+      role = thirdArg?.role
+    }
+
+    const cleanEmail = (email || '').trim().toLowerCase()
+    const isSuper = cleanEmail === SUPER_ADMIN_EMAIL.toLowerCase()
+    const finalRole = isSuper ? 'super_admin' : (role || null)
+    const verified = isSuper ? true : false
 
     const { data, error } = await supabase.auth.signUp({
-      email: userEmail,
+      email: cleanEmail,
       password,
       options: {
         data: {
           full_name: fullName,
-          role,
-          phone: userPhone,
+          role: finalRole,
+          phone: phone || '',
+          verified,
+          status: verified ? 'active' : 'pending_verification',
         },
       },
     })
@@ -63,8 +111,12 @@ export function AuthProvider({ children }) {
         await supabase.from('staff').insert({
           id: data.user.id,
           name: fullName,
-          role,
-          active: true,
+          email: cleanEmail,
+          phone: phone || '',
+          role: finalRole,
+          active: verified,
+          verified,
+          status: verified ? 'active' : 'pending_verification',
         })
       }
     } catch (e) {
@@ -72,6 +124,28 @@ export function AuthProvider({ children }) {
     }
 
     setUser(data.user)
+    return data
+  }
+
+  const approveStaff = async (staffId, assignedRole) => {
+    const { data, error } = await supabase
+      .from('staff')
+      .update({
+        role: assignedRole,
+        verified: true,
+        active: true,
+        status: 'active',
+      })
+      .eq('id', staffId)
+      .select()
+      .single()
+
+    if (error) throw error
+
+    // If current logged-in user was approved, refresh session
+    if (user?.id === staffId) {
+      await refreshUser()
+    }
     return data
   }
 
@@ -86,8 +160,12 @@ export function AuthProvider({ children }) {
     if (error) throw error
   }
 
-  const role = user?.user_metadata?.role || 'both'
+  const isSuperAdmin = isUserSuperAdmin(user)
+  const isVerified = isUserVerified(user)
+  const role = isSuperAdmin ? 'super_admin' : (user?.user_metadata?.role || user?.role || null)
   const fullName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Staff Member'
+  const email = user?.email || ''
+  const phone = user?.user_metadata?.phone || user?.phone || ''
 
   return (
     <AuthContext.Provider
@@ -95,10 +173,16 @@ export function AuthProvider({ children }) {
         user,
         role,
         fullName,
+        email,
+        phone,
+        isSuperAdmin,
+        isVerified,
         loading,
         signIn,
         signUp,
         signOut,
+        refreshUser,
+        approveStaff,
         resetPassword,
         isAuthenticated: !!user,
       }}
@@ -115,3 +199,4 @@ export function useAuth() {
   }
   return context
 }
+

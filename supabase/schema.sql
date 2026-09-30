@@ -20,8 +20,12 @@ create table if not exists customers (
 create table if not exists staff (
   id          uuid primary key default gen_random_uuid(),
   name        text not null,
-  role        text check (role in ('employee', 'cashier', 'both')) default 'both',
+  email       text unique,
+  phone       text,
+  role        text check (role in ('super_admin', 'admin', 'employee', 'cashier', 'both', 'workshop', 'installer')),
   active      boolean default true,
+  verified    boolean default false,
+  status      text default 'pending_verification',
   created_at  timestamptz default now()
 );
 

@@ -12,14 +12,17 @@ import {
 
 function StatCard({ title, value, icon: Icon, bg, sub }) {
   return (
-    <Card>
+    <Card hoverEffect className="group cursor-pointer">
       <CardContent className="flex items-start gap-4 pt-5">
-        <div className="p-3 rounded-xl shrink-0" style={{ background: bg }}>
-          <Icon className="h-5 w-5 text-white" />
+        <div
+          className="p-3 rounded-2xl shrink-0 transition-transform duration-300 group-hover:scale-115 group-hover:rotate-6 shadow-xs"
+          style={{ background: bg }}
+        >
+          <Icon className="h-5 w-5 text-white transition-transform duration-300" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm" style={{ color: 'var(--fg-muted)' }}>{title}</p>
-          <p className="text-2xl font-bold mt-0.5" style={{ color: 'var(--fg)' }}>{value}</p>
+          <p className="text-sm font-medium" style={{ color: 'var(--fg-muted)' }}>{title}</p>
+          <p className="text-2xl font-bold mt-0.5 tracking-tight" style={{ color: 'var(--fg)' }}>{value}</p>
           {sub && <p className="text-xs mt-0.5" style={{ color: 'var(--fg-subtle)' }}>{sub}</p>}
         </div>
       </CardContent>

@@ -1,9 +1,11 @@
 // src/lib/demoData.js
 
 export const INITIAL_STAFF = [
-  { id: '11111111-1111-1111-1111-111111111111', name: 'Mukasa Joseph', role: 'employee', active: true, created_at: new Date(Date.now() - 40*86400000).toISOString() },
-  { id: '22222222-2222-2222-2222-222222222222', name: 'Nakato Sarah', role: 'cashier', active: true, created_at: new Date(Date.now() - 30*86400000).toISOString() },
-  { id: '33333333-3333-3333-3333-333333333333', name: 'Okello Brian', role: 'both', active: true, created_at: new Date(Date.now() - 20*86400000).toISOString() },
+  { id: '00000000-0000-0000-0000-000000000000', name: 'Sharity (Super Admin)', email: 'sharityra41@gmail.com', phone: '+256 700 000 001', role: 'super_admin', active: true, verified: true, status: 'active', created_at: new Date(Date.now() - 60*86400000).toISOString() },
+  { id: '11111111-1111-1111-1111-111111111111', name: 'Mukasa Joseph', email: 'mukasa@curtainworld.ug', phone: '+256 772 345 678', role: 'employee', active: true, verified: true, status: 'active', created_at: new Date(Date.now() - 40*86400000).toISOString() },
+  { id: '22222222-2222-2222-2222-222222222222', name: 'Nakato Sarah', email: 'nakato@curtainworld.ug', phone: '+256 701 987 654', role: 'cashier', active: true, verified: true, status: 'active', created_at: new Date(Date.now() - 30*86400000).toISOString() },
+  { id: '33333333-3333-3333-3333-333333333333', name: 'Okello Brian', email: 'okello@curtainworld.ug', phone: '+256 752 456 789', role: 'both', active: true, verified: true, status: 'active', created_at: new Date(Date.now() - 20*86400000).toISOString() },
+  { id: '44444444-4444-4444-4444-444444444444', name: 'Kigozi Peter', email: 'kigozi@curtainworld.ug', phone: '+256 702 334 455', role: null, active: false, verified: false, status: 'pending_verification', created_at: new Date(Date.now() - 2*3600000).toISOString() },
 ]
 
 export const INITIAL_CUSTOMERS = [

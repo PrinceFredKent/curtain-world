@@ -8,19 +8,28 @@ export function cn(...inputs) {
 }
 
 export function formatCurrency(amount) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-  }).format(amount ?? 0)
+  const val = Math.round(Number(amount) || 0)
+  return `UGX ${new Intl.NumberFormat('en-UG').format(val)}`
+}
+
+export function formatCompactUGX(amount) {
+  const val = Number(amount) || 0
+  if (val >= 1_000_000) {
+    const m = (val / 1_000_000).toFixed(1)
+    return `${m.endsWith('.0') ? m.slice(0, -2) : m}M`
+  }
+  if (val >= 1_000) return `${Math.round(val / 1_000)}k`
+  return `${val}`
 }
 
 export function formatDate(date) {
-  return format(new Date(date), 'MMM dd, yyyy')
+  if (!date) return '—'
+  return format(new Date(date), 'dd MMM yyyy')
 }
 
 export function formatDateTime(date) {
-  return format(new Date(date), 'MMM dd, yyyy HH:mm')
+  if (!date) return '—'
+  return format(new Date(date), 'dd MMM yyyy, HH:mm')
 }
 
 export function getDateRange(period) {
@@ -29,7 +38,7 @@ export function getDateRange(period) {
     case 'day':
       return { from: startOfDay(now), to: endOfDay(now) }
     case 'week':
-      return { from: startOfWeek(now, { weekStartsOn: 0 }), to: endOfWeek(now, { weekStartsOn: 0 }) }
+      return { from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }) }
     case 'month':
       return { from: startOfMonth(now), to: endOfMonth(now) }
     case 'year':
@@ -39,12 +48,15 @@ export function getDateRange(period) {
   }
 }
 
-export function getStatusColor(status) {
-  switch (status) {
-    case 'paid': return 'bg-green-100 text-green-800'
-    case 'partial': return 'bg-yellow-100 text-yellow-800'
-    case 'pending': return 'bg-red-100 text-red-800'
-    case 'cancelled': return 'bg-gray-100 text-gray-600'
-    default: return 'bg-gray-100 text-gray-600'
+export function getPaymentMethodLabel(method) {
+  const map = {
+    momo: 'MTN MoMo',
+    airtel: 'Airtel Money',
+    cash: 'Cash',
+    bank: 'Bank Transfer',
+    card: 'Card / POS',
+    other: 'Other',
+    transfer: 'Bank Transfer',
   }
+  return map[method?.toLowerCase()] || method || 'Cash'
 }

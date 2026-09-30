@@ -15,13 +15,13 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ArrowLeft, Plus, Download, Trash2, DollarSign } from 'lucide-react'
-import { formatCurrency, formatDateTime, formatDate } from '../lib/utils'
+import { formatCurrency, formatDateTime, formatDate, getPaymentMethodLabel } from '../lib/utils'
 import { generateReceiptPDF, downloadPDF } from '../lib/pdf'
 
 const paymentSchema = z.object({
   amount: z.coerce.number().positive('Amount must be positive'),
   type: z.enum(['deposit', 'payment']),
-  payment_method: z.enum(['cash', 'card', 'transfer', 'other']),
+  payment_method: z.enum(['momo', 'airtel', 'cash', 'bank', 'card', 'other']),
   cashier_id: z.string().optional(),
   employee_id: z.string().optional(),
   notes: z.string().optional(),
@@ -37,7 +37,7 @@ function AddPaymentModal({ open, onClose, order, defaultType = 'payment' }) {
     resolver: zodResolver(paymentSchema),
     defaultValues: {
       type: defaultType,
-      payment_method: 'cash',
+      payment_method: 'momo',
       amount: order?.balance ?? '',
     },
   })
@@ -70,20 +70,22 @@ function AddPaymentModal({ open, onClose, order, defaultType = 'payment' }) {
             <option value="deposit">Deposit</option>
             <option value="payment">Payment</option>
           </Select>
-          <Select label="Method *" {...register('payment_method')}>
+          <Select label="Payment Method *" {...register('payment_method')}>
+            <option value="momo">MTN MoMo</option>
+            <option value="airtel">Airtel Money</option>
             <option value="cash">Cash</option>
-            <option value="card">Card</option>
-            <option value="transfer">Transfer</option>
+            <option value="bank">Bank Transfer</option>
+            <option value="card">Card / POS</option>
             <option value="other">Other</option>
           </Select>
         </div>
 
         <Input
-          label="Amount *"
+          label="Amount (UGX) *"
           type="number"
-          step="0.01"
-          min="0.01"
-          placeholder="0.00"
+          step="500"
+          min="500"
+          placeholder="e.g. 500000"
           error={errors.amount?.message}
           {...register('amount')}
         />
@@ -332,7 +334,7 @@ export function OrderDetail() {
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-sm font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(txn.amount)}</td>
-                    <td className="px-4 py-3 text-sm capitalize" style={{ color: 'var(--fg-muted)' }}>{txn.payment_method}</td>
+                    <td className="px-4 py-3 text-sm" style={{ color: 'var(--fg-muted)' }}>{getPaymentMethodLabel(txn.payment_method)}</td>
                     <td className="px-4 py-3 text-sm" style={{ color: 'var(--fg-muted)' }}>{txn.cashier?.name || '—'}</td>
                     <td className="px-4 py-3 text-sm" style={{ color: 'var(--fg-subtle)' }}>{txn.notes || '—'}</td>
                     <td className="px-4 py-3 text-right">

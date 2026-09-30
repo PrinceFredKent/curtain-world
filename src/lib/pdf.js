@@ -1,7 +1,6 @@
-// src/lib/pdf.js
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { formatCurrency, formatDateTime } from './utils'
+import { formatCurrency, formatDateTime, getPaymentMethodLabel } from './utils'
 
 const BRAND = {
   name: 'Curtain World',
@@ -177,7 +176,7 @@ export function generateReceiptPDF({ transaction, order, customer, employee, cas
     doc.setFontSize(8)
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(255, 255, 255)
-    doc.text(`via ${transaction.payment_method}`, pageWidth - 14, y + 13, { align: 'right' })
+    doc.text(`via ${getPaymentMethodLabel(transaction.payment_method)}`, pageWidth - 14, y + 13, { align: 'right' })
   }
 
   addFooter(doc)

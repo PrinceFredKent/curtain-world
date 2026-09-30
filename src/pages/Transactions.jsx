@@ -5,7 +5,7 @@ import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Select } from '../components/ui/Select'
-import { formatCurrency, formatDateTime, getDateRange } from '../lib/utils'
+import { formatCurrency, formatDateTime, getDateRange, getPaymentMethodLabel } from '../lib/utils'
 import { Download, ArrowUpDown } from 'lucide-react'
 import { generateReceiptPDF, downloadPDF } from '../lib/pdf'
 import { useToast } from '../components/ui/Toast'
@@ -111,7 +111,7 @@ export function Transactions() {
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-sm font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(txn.amount)}</td>
-                    <td className="px-4 py-3 text-sm capitalize" style={{ color: 'var(--fg-muted)' }}>{txn.payment_method}</td>
+                    <td className="px-4 py-3 text-sm" style={{ color: 'var(--fg-muted)' }}>{getPaymentMethodLabel(txn.payment_method)}</td>
                     <td className="px-4 py-3 text-sm" style={{ color: 'var(--fg-muted)' }}>{txn.cashier?.name || '—'}</td>
                     <td className="px-4 py-3 text-sm" style={{ color: 'var(--fg-muted)' }}>{txn.employee?.name || '—'}</td>
                     <td className="px-4 py-3 text-right">

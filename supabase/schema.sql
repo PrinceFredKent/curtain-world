@@ -66,8 +66,8 @@ create table if not exists transactions (
   employee_id     uuid references staff(id) on delete set null,
   cashier_id      uuid references staff(id) on delete set null,
   type            text check (type in ('deposit','payment')) not null,
-  amount          numeric(12,2) not null,
-  payment_method  text check (payment_method in ('cash','card','transfer','other')) default 'cash',
+  amount          numeric(14,2) not null,
+  payment_method  text check (payment_method in ('momo','airtel','cash','bank','card','other','transfer')) default 'momo',
   receipt_url     text,
   notes           text,
   created_at      timestamptz default now()
@@ -159,6 +159,7 @@ group by s.id, s.name;
 -- SEED: demo staff
 -- ─────────────────────────────────────────────
 insert into staff (name, role) values
-  ('Ahmed', 'employee'),
-  ('Sara', 'cashier')
+  ('Mukasa Joseph', 'employee'),
+  ('Nakato Sarah', 'cashier'),
+  ('Okello Brian', 'both')
 on conflict do nothing;

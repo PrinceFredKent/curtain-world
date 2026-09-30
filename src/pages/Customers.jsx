@@ -25,9 +25,9 @@ function CustomerForm({ defaultValues, onSubmit, loading }) {
   })
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <Input label="Full Name" icon={<User className="h-4 w-4" />} placeholder="John Doe"
+      <Input label="Full Name" icon={<User className="h-4 w-4" />} placeholder="e.g. Namubiru Grace"
         error={errors.full_name?.message} {...register('full_name')} />
-      <Input label="Phone / WhatsApp" icon={<Phone className="h-4 w-4" />} placeholder="+1 234 567 8900"
+      <Input label="Phone / WhatsApp" icon={<Phone className="h-4 w-4" />} placeholder="+256 772 000 000"
         type="tel" error={errors.phone?.message} {...register('phone')} />
       <div className="pt-2 flex justify-end">
         <Button type="submit" loading={loading}>Save Customer</Button>

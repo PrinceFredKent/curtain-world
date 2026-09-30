@@ -1,7 +1,7 @@
 // src/pages/Dashboard.jsx
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import { formatCurrency, formatDate } from '../lib/utils'
+import { formatCurrency, formatDate, formatCompactUGX } from '../lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Link } from 'react-router-dom'
@@ -130,7 +130,7 @@ export function Dashboard() {
               <BarChart data={weeklyData || []} barSize={28}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'var(--fg-muted)' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 12, fill: 'var(--fg-muted)' }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
+                <YAxis tick={{ fontSize: 12, fill: 'var(--fg-muted)' }} axisLine={false} tickLine={false} tickFormatter={v => formatCompactUGX(v)} />
                 <Tooltip
                   formatter={v => formatCurrency(v)}
                   contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg)' }}

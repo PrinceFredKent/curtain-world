@@ -161,8 +161,8 @@ function CreateOrderModal({ open, onClose }) {
                       {...register(`items.${index}.unit_price`)}
                       type="number"
                       min="0"
-                      step="0.01"
-                      placeholder="0.00"
+                      step="500"
+                      placeholder="e.g. 50000"
                       className="w-full rounded-lg border px-2 py-2 text-sm text-right focus:outline-none focus:ring-2"
                       style={{
                         background: 'var(--surface)',

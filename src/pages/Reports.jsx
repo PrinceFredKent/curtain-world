@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useReport } from '../hooks/useReports'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import { formatCurrency, formatDate } from '../lib/utils'
+import { formatCurrency, formatDate, formatCompactUGX } from '../lib/utils'
 import { generateReportPDF, downloadPDF } from '../lib/pdf'
 import { useToast } from '../components/ui/Toast'
 import {
@@ -173,7 +173,7 @@ export function Reports() {
                   <ResponsiveContainer width="100%" height={220}>
                     <BarChart data={data.byEmployee} layout="vertical" barSize={18}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                      <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--fg-muted)' }} tickFormatter={v => `$${v}`} axisLine={false} tickLine={false} />
+                      <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--fg-muted)' }} tickFormatter={v => formatCompactUGX(v)} axisLine={false} tickLine={false} />
                       <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: 'var(--fg-muted)' }} width={70} axisLine={false} tickLine={false} />
                       <Tooltip
                         formatter={v => formatCurrency(v)}

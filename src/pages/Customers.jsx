@@ -6,6 +6,7 @@ import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { Modal } from '../components/ui/Modal'
 import { useToast } from '../components/ui/Toast'
+import { useConfirm } from '../components/ui/ConfirmDialog'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -54,13 +55,13 @@ export function Customers() {
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [editCustomer, setEditCustomer] = useState(null)
-  const [deleteCustomer, setDeleteCustomer] = useState(null)
 
   const { data: customers, isLoading } = useCustomers(search)
   const createMutation = useCreateCustomer()
   const updateMutation = useUpdateCustomer()
   const deleteMutation = useDeleteCustomer()
   const toast = useToast()
+  const confirm = useConfirm()
 
   const handleCreate = async (data) => {
     try {
@@ -78,11 +79,27 @@ export function Customers() {
     } catch (err) { toast({ type: 'error', message: err.message }) }
   }
 
-  const handleDelete = async () => {
+  const handleDelete = async (customer) => {
+    const confirmed = await confirm({
+      title: 'Delete Customer',
+      message: `Are you sure you want to delete ${customer.full_name}?`,
+      confirmText: 'Delete Customer',
+      cancelText: 'Cancel',
+      variant: 'danger',
+      itemDetails: {
+        label: 'Customer',
+        value: customer.full_name,
+        subtext: customer.phone,
+        badge: 'Customer Record',
+      },
+      warningNote: 'This customer profile will be permanently removed. Their previous orders will be preserved.',
+    })
+
+    if (!confirmed) return
+
     try {
-      await deleteMutation.mutateAsync(deleteCustomer.id)
-      toast({ type: 'success', message: 'Customer deleted' })
-      setDeleteCustomer(null)
+      await deleteMutation.mutateAsync(customer.id)
+      toast({ type: 'success', message: `${customer.full_name} deleted successfully` })
     } catch (err) { toast({ type: 'error', message: err.message }) }
   }
 
@@ -134,10 +151,12 @@ export function Customers() {
                           onMouseEnter={e => e.currentTarget.style.background = 'var(--brand-light)'}
                           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                         ><Edit2 className="h-4 w-4" /></button>
-                        <button onClick={() => setDeleteCustomer(c)}
-                          className="p-1.5 rounded-lg transition-colors text-red-500"
+                        <button onClick={() => handleDelete(c)}
+                          className="p-1.5 rounded-lg transition-colors text-red-500 cursor-pointer"
+                          style={{ color: 'var(--danger)' }}
                           onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
                           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          title="Delete customer"
                         ><Trash2 className="h-4 w-4" /></button>
                       </div>
                     </td>
@@ -160,17 +179,6 @@ export function Customers() {
       </Modal>
       <Modal open={!!editCustomer} onClose={() => setEditCustomer(null)} title="Edit Customer">
         {editCustomer && <CustomerForm defaultValues={editCustomer} onSubmit={handleUpdate} loading={updateMutation.isPending} />}
-      </Modal>
-      <Modal open={!!deleteCustomer} onClose={() => setDeleteCustomer(null)} title="Delete Customer" size="sm">
-        <div className="space-y-4">
-          <p className="text-sm" style={{ color: 'var(--fg-muted)' }}>
-            Delete <strong style={{ color: 'var(--fg)' }}>{deleteCustomer?.full_name}</strong>? This cannot be undone.
-          </p>
-          <div className="flex justify-end gap-3">
-            <Button variant="secondary" onClick={() => setDeleteCustomer(null)}>Cancel</Button>
-            <Button variant="danger" loading={deleteMutation.isPending} onClick={handleDelete}>Delete</Button>
-          </div>
-        </div>
       </Modal>
     </div>
   )

@@ -11,6 +11,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { useToast } from '../components/ui/Toast'
+import { useConfirm } from '../components/ui/ConfirmDialog'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -154,6 +155,7 @@ export function OrderDetail() {
   const { data: order, isLoading } = useOrder(id)
   const deleteTxn = useDeleteTransaction()
   const toast = useToast()
+  const confirm = useConfirm()
   const [showPayment, setShowPayment] = useState(false)
 
   if (isLoading) {
@@ -194,10 +196,26 @@ export function OrderDetail() {
   }
 
   const handleDeleteTxn = async (txn) => {
-    if (!confirm('Delete this transaction? This will update the order balance.')) return
+    const confirmed = await confirm({
+      title: 'Delete Transaction',
+      message: 'Are you sure you want to delete this payment record?',
+      confirmText: 'Delete Payment',
+      cancelText: 'Keep Record',
+      variant: 'danger',
+      itemDetails: {
+        label: 'Payment Details',
+        value: formatCurrency(txn.amount),
+        subtext: `${getPaymentMethodLabel(txn.payment_method)} • ${formatDateTime(txn.created_at)}`,
+        badge: txn.type?.toUpperCase() || 'PAYMENT',
+      },
+      warningNote: 'Deleting this transaction will automatically recalculate and increase the order unpaid balance.',
+    })
+
+    if (!confirmed) return
+
     try {
       await deleteTxn.mutateAsync(txn.id)
-      toast({ type: 'success', message: 'Transaction deleted' })
+      toast({ type: 'success', message: 'Transaction deleted and balance updated' })
     } catch (err) {
       toast({ type: 'error', message: err.message })
     }

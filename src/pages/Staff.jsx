@@ -15,6 +15,7 @@ import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { useToast } from '../components/ui/Toast'
+import { useConfirm } from '../components/ui/ConfirmDialog'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -140,6 +141,7 @@ export function Staff() {
   const verifyMutation = useVerifyStaff()
   const deleteMutation = useRejectStaff()
   const toast = useToast()
+  const confirm = useConfirm()
 
   const handleCreate = async (data) => {
     try {
@@ -183,7 +185,23 @@ export function Staff() {
   }
 
   const handleReject = async (member) => {
-    if (!confirm(`Are you sure you want to reject the registration for ${member.name}?`)) return
+    const confirmed = await confirm({
+      title: 'Reject Registration',
+      message: `Are you sure you want to reject the registration application for ${member.name}?`,
+      confirmText: 'Reject Registration',
+      cancelText: 'Keep Pending',
+      variant: 'danger',
+      itemDetails: {
+        label: 'Applicant',
+        value: member.name,
+        subtext: member.email || member.phone || 'No direct contact info',
+        badge: 'Pending Verification',
+      },
+      warningNote: 'This applicant account will be deleted and will not be able to log in or access the system.',
+    })
+
+    if (!confirmed) return
+
     try {
       await deleteMutation.mutateAsync(member.id)
       toast({ type: 'info', message: `Registration for ${member.name} was rejected.` })
@@ -198,7 +216,23 @@ export function Staff() {
       return
     }
 
-    if (!confirm(`Are you sure you want to remove ${member.name} from staff? This will revoke their access.`)) return
+    const confirmed = await confirm({
+      title: 'Remove Staff Member',
+      message: `Are you sure you want to remove ${member.name} from staff? This will immediately revoke their store and system access.`,
+      confirmText: 'Remove Staff',
+      cancelText: 'Cancel',
+      variant: 'danger',
+      itemDetails: {
+        label: 'Staff Member',
+        value: member.name,
+        subtext: member.email || member.phone || 'No direct contact info',
+        badge: roleLabels[member.role] || member.role || 'Staff',
+      },
+      warningNote: 'All active sessions and privileges for this staff member will be permanently revoked.',
+    })
+
+    if (!confirmed) return
+
     try {
       await deleteMutation.mutateAsync(member.id)
       toast({ type: 'success', message: `${member.name} removed successfully` })

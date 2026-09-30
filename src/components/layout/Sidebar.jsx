@@ -18,6 +18,7 @@ import { useSidebar } from '../../context/SidebarContext'
 import { useAllStaff } from '../../hooks/useStaff'
 import { Badge } from '../ui/Badge'
 import { WaterRipple } from '../ui/WaterRipple'
+import { useConfirm } from '../ui/ConfirmDialog'
 import { cn } from '../../lib/utils'
 
 const navItems = [
@@ -33,6 +34,20 @@ export function Sidebar() {
   const { collapsed, toggleCollapsed, mobileOpen, closeMobile } = useSidebar()
   const { user, fullName, role, isSuperAdmin, signOut } = useAuth()
   const { data: staffList } = useAllStaff()
+  const confirm = useConfirm()
+
+  const handleSignOut = async () => {
+    const confirmed = await confirm({
+      title: 'Sign Out',
+      message: 'Are you sure you want to end your current session?',
+      confirmText: 'Sign Out',
+      cancelText: 'Stay Logged In',
+      variant: 'warning',
+    })
+    if (confirmed) {
+      signOut()
+    }
+  }
 
   const pendingCount = isSuperAdmin
     ? (staffList || []).filter(
@@ -291,7 +306,7 @@ export function Sidebar() {
               {/* Sign Out Button */}
               <button
                 type="button"
-                onClick={() => signOut()}
+                onClick={handleSignOut}
                 className={cn(
                   'p-1.5 rounded-lg transition-all duration-200 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 hover:scale-110 active:scale-90 shrink-0 cursor-pointer',
                   collapsed && 'md:hidden'
@@ -307,7 +322,7 @@ export function Sidebar() {
             {collapsed && (
               <button
                 type="button"
-                onClick={() => signOut()}
+                onClick={handleSignOut}
                 className="hidden md:flex w-full mt-1.5 p-2 rounded-xl transition-all duration-200 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 hover:scale-105 active:scale-90 items-center justify-center cursor-pointer shadow-xs"
                 title="Sign Out"
                 aria-label="Sign Out"

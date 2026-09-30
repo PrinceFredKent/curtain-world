@@ -2,6 +2,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ToastProvider } from './components/ui/Toast'
+import { ConfirmProvider } from './components/ui/ConfirmDialog'
 import { AuthProvider } from './context/AuthContext'
 import { SidebarProvider } from './context/SidebarContext'
 import { ProtectedRoute, PublicOnlyRoute } from './components/auth/ProtectedRoute'
@@ -30,37 +31,39 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
-        <AuthProvider>
-          <SidebarProvider>
-            <BrowserRouter>
-              <Routes>
-                {/* Public-only Auth Routes */}
-                <Route element={<PublicOnlyRoute />}>
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/signup" element={<Register />} />
-                  <Route path="/register" element={<Register />} />
-                  <Route path="/forgot-password" element={<ForgotPassword />} />
-                </Route>
-
-                {/* Protected Staff Routes */}
-                <Route element={<ProtectedRoute />}>
-                  <Route element={<Layout />}>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/customers" element={<Customers />} />
-                    <Route path="/orders" element={<Orders />} />
-                    <Route path="/orders/:id" element={<OrderDetail />} />
-                    <Route path="/transactions" element={<Transactions />} />
-                    <Route path="/reports" element={<Reports />} />
-                    <Route path="/staff" element={<Staff />} />
+        <ConfirmProvider>
+          <AuthProvider>
+            <SidebarProvider>
+              <BrowserRouter>
+                <Routes>
+                  {/* Public-only Auth Routes */}
+                  <Route element={<PublicOnlyRoute />}>
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/signup" element={<Register />} />
+                    <Route path="/register" element={<Register />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
                   </Route>
-                </Route>
 
-                {/* Catch-all fallback */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </BrowserRouter>
-          </SidebarProvider>
-        </AuthProvider>
+                  {/* Protected Staff Routes */}
+                  <Route element={<ProtectedRoute />}>
+                    <Route element={<Layout />}>
+                      <Route path="/" element={<Dashboard />} />
+                      <Route path="/customers" element={<Customers />} />
+                      <Route path="/orders" element={<Orders />} />
+                      <Route path="/orders/:id" element={<OrderDetail />} />
+                      <Route path="/transactions" element={<Transactions />} />
+                      <Route path="/reports" element={<Reports />} />
+                      <Route path="/staff" element={<Staff />} />
+                    </Route>
+                  </Route>
+
+                  {/* Catch-all fallback */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </BrowserRouter>
+            </SidebarProvider>
+          </AuthProvider>
+        </ConfirmProvider>
       </ToastProvider>
     </QueryClientProvider>
   )

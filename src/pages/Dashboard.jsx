@@ -5,7 +5,8 @@ import { formatCurrency, formatDate, formatCompactUGX } from '../lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Link } from 'react-router-dom'
-import { TrendingUp, ShoppingBag, Users, DollarSign, AlertCircle } from 'lucide-react'
+import { ShoppingBag, Users, DollarSign, AlertCircle, HandCoins, Plus } from 'lucide-react'
+import { Button } from '../components/ui/Button'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
@@ -107,11 +108,28 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--fg)' }}>Dashboard</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--fg-muted)' }}>
-          {new Date().toLocaleDateString('en', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--fg)' }}>Dashboard</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--fg-muted)' }}>
+            {new Date().toLocaleDateString('en', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <Link to="/receive-payment">
+            <Button variant="secondary" size="sm">
+              <HandCoins className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              Receive Payment
+            </Button>
+          </Link>
+          <Link to="/orders">
+            <Button size="sm">
+              <Plus className="h-4 w-4" />
+              Record Sale
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Stats */}

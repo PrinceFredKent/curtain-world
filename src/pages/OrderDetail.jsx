@@ -16,9 +16,10 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ArrowLeft, Plus, Download, Trash2, DollarSign, User, ShieldCheck } from 'lucide-react'
-import { formatCurrency, formatDateTime, formatDate, getPaymentMethodLabel } from '../lib/utils'
-import { generateReceiptPDF, downloadPDF } from '../lib/pdf'
+import { formatCurrency, formatDateTime, formatDate, getPaymentMethodLabel, getOrderStatus } from '../lib/utils'
+import { generateReceiptPDF, downloadPDF, downloadOrderPDF, downloadOrderPNG, printOrderReceipt } from '../lib/pdf'
 import { useAuth } from '../context/AuthContext'
+import { Printer, FileText, Image as ImageIcon } from 'lucide-react'
 
 const paymentSchema = z.object({
   amount: z.coerce.number().positive('Amount must be positive'),
@@ -242,26 +243,67 @@ export function OrderDetail() {
     }
   }
 
-  const statusInfo = {
-    paid: { variant: 'green', label: 'Paid' },
-    partial: { variant: 'yellow', label: 'Partial' },
-    pending: { variant: 'red', label: 'Pending' },
-    cancelled: { variant: 'default', label: 'Cancelled' },
+  const statusInfo = getOrderStatus(order)
+
+  const handlePrintOrder = () => {
+    try {
+      printOrderReceipt({ order })
+      toast({ type: 'success', message: 'Print window opened.' })
+    } catch (err) {
+      toast({ type: 'error', message: 'Print failed: ' + err.message })
+    }
   }
-  const { variant: statusVariant, label: statusLabel } = statusInfo[order.status] || statusInfo.pending
+
+  const handleDownloadOrderPDF = () => {
+    try {
+      downloadOrderPDF({ order }, `order-ORD-${order.order_number || order.id?.slice(0, 6)}.pdf`)
+      toast({ type: 'success', message: 'Order PDF downloaded!' })
+    } catch (err) {
+      toast({ type: 'error', message: 'PDF failed: ' + err.message })
+    }
+  }
+
+  const handleDownloadOrderPNG = () => {
+    try {
+      downloadOrderPNG({ order }, `order-ORD-${order.order_number || order.id?.slice(0, 6)}.png`)
+      toast({ type: 'success', message: 'Order PNG downloaded!' })
+    } catch (err) {
+      toast({ type: 'error', message: 'PNG failed: ' + err.message })
+    }
+  }
 
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
           <Link to="/orders" className="text-sm flex items-center gap-1 mb-2 hover:underline" style={{ color: 'var(--fg-muted)' }}>
             <ArrowLeft className="h-3.5 w-3.5" /> Back to orders
           </Link>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--fg)' }}>ORD-{order.order_number}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--fg)' }}>ORD-{order.order_number}</h1>
+            <span
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border"
+              style={statusInfo.badgeStyle}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${statusInfo.isCleared ? 'bg-emerald-500' : statusInfo.percent > 0 ? 'bg-amber-500' : 'bg-red-500'}`} />
+              {statusInfo.label}
+            </span>
+          </div>
           <p className="text-sm mt-1" style={{ color: 'var(--fg-muted)' }}>Created {formatDate(order.created_at)}</p>
         </div>
-        <Badge variant={statusVariant} className="text-sm px-3 py-1">{statusLabel}</Badge>
+
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={handlePrintOrder} title="Print Voucher">
+            <Printer className="h-4 w-4" /> Print Voucher
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleDownloadOrderPDF} title="Download PDF">
+            <FileText className="h-4 w-4" /> PDF
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleDownloadOrderPNG} title="Download PNG">
+            <ImageIcon className="h-4 w-4" /> PNG
+          </Button>
+        </div>
       </div>
 
       {/* Summary cards */}

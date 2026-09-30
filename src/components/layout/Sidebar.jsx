@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Users,
   ShoppingBag,
+  HandCoins,
   ArrowUpDown,
   BarChart3,
   UserCog,
@@ -24,6 +25,7 @@ import { cn } from '../../lib/utils'
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/orders', label: 'Orders', icon: ShoppingBag },
+  { to: '/receive-payment', label: 'Receive Payment', icon: HandCoins },
   { to: '/customers', label: 'Customers', icon: Users },
   { to: '/transactions', label: 'Transactions', icon: ArrowUpDown },
   { to: '/reports', label: 'Reports', icon: BarChart3 },

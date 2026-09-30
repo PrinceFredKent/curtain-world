@@ -14,6 +14,7 @@ import { Customers } from './pages/Customers'
 import { Orders } from './pages/Orders'
 import { OrderDetail } from './pages/OrderDetail'
 import { Transactions } from './pages/Transactions'
+import { ReceivePayment } from './pages/ReceivePayment'
 import { Reports } from './pages/Reports'
 import { Staff } from './pages/Staff'
 
@@ -50,6 +51,7 @@ export default function App() {
                       <Route path="/customers" element={<Customers />} />
                       <Route path="/orders" element={<Orders />} />
                       <Route path="/orders/:id" element={<OrderDetail />} />
+                      <Route path="/receive-payment" element={<ReceivePayment />} />
                       <Route path="/transactions" element={<Transactions />} />
                       <Route path="/reports" element={<Reports />} />
                       <Route path="/staff" element={<Staff />} />

@@ -3,7 +3,8 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useOrders, useCreateOrder } from '../hooks/useOrders'
 import { useCustomers } from '../hooks/useCustomers'
-import { useStaff } from '../hooks/useStaff'
+import { useAllStaff } from '../hooks/useStaff'
+import { useCreateTransaction } from '../hooks/useTransactions'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
@@ -14,9 +15,8 @@ import { useToast } from '../components/ui/Toast'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, Trash2, Search, Package } from 'lucide-react'
+import { Plus, Trash2, Search, Package, ShieldCheck, User, Banknote } from 'lucide-react'
 import { formatCurrency, formatDate } from '../lib/utils'
-
 import { useAuth } from '../context/AuthContext'
 
 const itemSchema = z.object({
@@ -27,8 +27,10 @@ const itemSchema = z.object({
 
 const orderSchema = z.object({
   customer_id: z.string().min(1, 'Select a customer'),
-  employee_id: z.string().optional(),
+  employee_id: z.string().min(1, 'Please select the staff member who worked on this client'),
   cashier_id: z.string().optional(),
+  initial_deposit: z.coerce.number().min(0).optional(),
+  payment_method: z.enum(['cash', 'momo', 'airtel', 'bank', 'card', 'other']).default('cash'),
   notes: z.string().optional(),
   items: z.array(itemSchema).min(1, 'Add at least one item'),
 })
@@ -38,18 +40,21 @@ function CreateOrderModal({ open, onClose }) {
   const navigate = useNavigate()
   const { user, fullName } = useAuth()
   const { data: customers } = useCustomers('')
-  const { data: employees } = useStaff('employee')
-  const { data: cashiers } = useStaff('cashier')
+  const { data: staffList } = useAllStaff()
   const createOrder = useCreateOrder()
+  const createTxn = useCreateTransaction()
 
-  const matchedEmployee = employees?.find(e => e.id === user?.id || e.name === fullName)
+  const activeStaff = (staffList || []).filter(s => s.active !== false)
+  const adminStaff = activeStaff.find(s => s.id === user?.id || s.email === user?.email || s.role === 'super_admin' || s.role === 'admin')
 
-  const { register, control, handleSubmit, watch, formState: { errors } } = useForm({
+  const { register, control, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(orderSchema),
     values: {
       items: [{ item_name: '', quantity: 1, unit_price: 0 }],
-      employee_id: matchedEmployee?.id || '',
-      cashier_id: '',
+      employee_id: '',
+      cashier_id: adminStaff?.id || user?.id || '',
+      initial_deposit: 0,
+      payment_method: 'cash',
       customer_id: '',
       notes: '',
     },
@@ -57,10 +62,13 @@ function CreateOrderModal({ open, onClose }) {
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })
   const watchedItems = watch('items')
+  const watchedDeposit = Number(watch('initial_deposit') || 0)
 
   const total = (watchedItems || []).reduce((sum, item) => {
     return sum + (Number(item.quantity) || 0) * (Number(item.unit_price) || 0)
   }, 0)
+
+  const balance = Math.max(0, total - watchedDeposit)
 
   const onSubmit = async (data) => {
     try {
@@ -68,43 +76,72 @@ function CreateOrderModal({ open, onClose }) {
         order: {
           customer_id: data.customer_id,
           employee_id: data.employee_id || null,
-          cashier_id: data.cashier_id || null,
+          cashier_id: data.cashier_id || adminStaff?.id || user?.id || null,
           total_amount: total,
           notes: data.notes || null,
         },
         items: data.items,
       })
-      toast({ type: 'success', message: 'Order created!' })
+
+      // If an initial deposit was collected on the spot, record the transaction immediately
+      if (data.initial_deposit && Number(data.initial_deposit) > 0) {
+        try {
+          await createTxn.mutateAsync({
+            order_id: order.id,
+            customer_id: data.customer_id,
+            employee_id: data.employee_id || null,
+            cashier_id: data.cashier_id || adminStaff?.id || user?.id || null,
+            type: 'deposit',
+            amount: Number(data.initial_deposit),
+            payment_method: data.payment_method || 'cash',
+            notes: 'Initial deposit recorded during sale creation',
+          })
+        } catch (e) {
+          console.warn('Could not record initial deposit transaction:', e)
+        }
+      }
+
+      toast({ type: 'success', message: 'Order and sale successfully recorded!' })
       onClose()
       navigate(`/orders/${order.id}`)
     } catch (err) {
-      toast({ type: 'error', message: err.message })
+      toast({ type: 'error', message: err.message || 'Failed to create order.' })
     }
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="New Order" size="xl">
+    <Modal open={open} onClose={onClose} title="Record New Sale / Order" size="xl">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-        {/* Customer */}
-        <Select label="Customer *" error={errors.customer_id?.message} {...register('customer_id')}>
-          <option value="">— Select customer —</option>
-          {(customers || []).map(c => (
-            <option key={c.id} value={c.id}>{c.full_name} · {c.phone}</option>
-          ))}
-        </Select>
-
-        <div className="grid grid-cols-2 gap-4">
-          <Select label="Employee" {...register('employee_id')}>
-            <option value="">— None —</option>
-            {(employees || []).map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
+        {/* Customer & Attending Staff */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Select
+            label="Customer *"
+            error={errors.customer_id?.message}
+            {...register('customer_id')}
+          >
+            <option value="">— Select Customer —</option>
+            {(customers || []).map(c => (
+              <option key={c.id} value={c.id}>{c.full_name} · {c.phone}</option>
             ))}
           </Select>
-          <Select label="Cashier" {...register('cashier_id')}>
-            <option value="">— None —</option>
-            {(cashiers || []).map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
+
+          <Select
+            label="Staff Member who worked on this client *"
+            error={errors.employee_id?.message}
+            {...register('employee_id')}
+          >
+            <option value="">— Select Attending Staff —</option>
+            {activeStaff.map(s => {
+              const roleName = s.role === 'employee' ? 'Sales Rep' :
+                s.role === 'workshop' ? 'Workshop / Tailor' :
+                s.role === 'installer' ? 'Installer' :
+                s.role === 'both' ? 'Sales & Workshop' : s.role
+              return (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({roleName})
+                </option>
+              )
+            })}
           </Select>
         </div>
 
@@ -128,9 +165,9 @@ function CreateOrderModal({ open, onClose }) {
           <div className="space-y-2">
             {/* Headers */}
             <div className="grid grid-cols-12 gap-2 text-xs font-semibold uppercase px-1" style={{ color: 'var(--fg-muted)' }}>
-              <span className="col-span-6">Item</span>
+              <span className="col-span-6">Item Description</span>
               <span className="col-span-2 text-center">Qty</span>
-              <span className="col-span-3 text-right">Unit Price</span>
+              <span className="col-span-3 text-right">Unit Price (UGX)</span>
               <span className="col-span-1" />
             </div>
 
@@ -144,7 +181,7 @@ function CreateOrderModal({ open, onClose }) {
                   <div className="col-span-6">
                     <input
                       {...register(`items.${index}.item_name`)}
-                      placeholder="Curtain item..."
+                      placeholder="e.g. Living room sheer curtains (meters)"
                       className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2"
                       style={{
                         background: 'var(--surface)',
@@ -173,7 +210,7 @@ function CreateOrderModal({ open, onClose }) {
                       type="number"
                       min="0"
                       step="500"
-                      placeholder="e.g. 50000"
+                      placeholder="e.g. 45000"
                       className="w-full rounded-lg border px-2 py-2 text-sm text-right focus:outline-none focus:ring-2"
                       style={{
                         background: 'var(--surface)',
@@ -197,21 +234,75 @@ function CreateOrderModal({ open, onClose }) {
               )
             })}
           </div>
+        </div>
 
-          {/* Total */}
-          <div className="mt-4 pt-4 border-t flex justify-between items-center" style={{ borderColor: 'var(--border)' }}>
-            <span className="font-semibold" style={{ color: 'var(--fg)' }}>Order Total</span>
-            <span className="text-xl font-bold" style={{ color: 'var(--brand)' }}>{formatCurrency(total)}</span>
+        {/* Financial & Deposit Collection Section */}
+        <div
+          className="p-4 rounded-xl border space-y-4"
+          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--fg)' }}>
+              <Banknote className="h-4 w-4 text-emerald-500" />
+              Payment & Balance Summary
+            </span>
+            <span className="text-xs font-semibold" style={{ color: 'var(--fg-muted)' }}>
+              Currency: UGX
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label="Deposit / Payment Collected Now"
+              type="number"
+              step="500"
+              min="0"
+              placeholder="0 (or amount paid now)"
+              error={errors.initial_deposit?.message}
+              {...register('initial_deposit')}
+            />
+
+            <Select label="Payment Method (Default: Cash)" {...register('payment_method')}>
+              <option value="cash">Cash (Default)</option>
+              <option value="momo">MTN Mobile Money</option>
+              <option value="airtel">Airtel Money</option>
+              <option value="bank">Bank Transfer</option>
+              <option value="card">Card / POS</option>
+              <option value="other">Other</option>
+            </Select>
+          </div>
+
+          {/* Live Dynamic Balance Breakdown Card */}
+          <div
+            className="p-3.5 rounded-lg border grid grid-cols-3 gap-2 text-center"
+            style={{ background: 'var(--surface-hover)', borderColor: 'var(--border)' }}
+          >
+            <div>
+              <p className="text-[11px] font-medium uppercase" style={{ color: 'var(--fg-muted)' }}>Order Total</p>
+              <p className="text-sm font-bold mt-0.5" style={{ color: 'var(--fg)' }}>{formatCurrency(total)}</p>
+            </div>
+            <div>
+              <p className="text-[11px] font-medium uppercase" style={{ color: 'var(--fg-muted)' }}>Deposit Paid</p>
+              <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                {formatCurrency(watchedDeposit)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] font-medium uppercase" style={{ color: 'var(--fg-muted)' }}>Balance Remaining</p>
+              <p className={`text-sm font-bold mt-0.5 ${balance > 0 ? 'text-amber-600 dark:text-amber-400 font-extrabold' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                {formatCurrency(balance)}
+              </p>
+            </div>
           </div>
         </div>
 
         {/* Notes */}
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--fg)' }}>Notes</label>
+          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--fg)' }}>Order Notes / Instructions</label>
           <textarea
             {...register('notes')}
             rows={2}
-            placeholder="Any special instructions..."
+            placeholder="Measurements, color preferences, delivery instructions..."
             className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2"
             style={{
               background: 'var(--surface)',
@@ -221,9 +312,11 @@ function CreateOrderModal({ open, onClose }) {
           />
         </div>
 
-        <div className="flex justify-end gap-3">
+        <div className="flex justify-end gap-3 pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" loading={createOrder.isPending}>Create Order</Button>
+          <Button type="submit" loading={isSubmitting || createOrder.isPending}>
+            Record Sale & Order
+          </Button>
         </div>
       </form>
     </Modal>
@@ -267,19 +360,22 @@ export function Orders() {
   const filtered = search
     ? orders.filter(o =>
         o.customer?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-        String(o.order_number).includes(search)
+        String(o.order_number).includes(search) ||
+        o.employee?.name?.toLowerCase().includes(search.toLowerCase())
       )
     : orders
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--fg)' }}>Orders</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--fg-muted)' }}>{total} total orders</p>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--fg)' }}>Orders & Sales</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--fg-muted)' }}>
+            {total} total orders recorded
+          </p>
         </div>
         <Button onClick={() => setShowCreate(true)}>
-          <Plus className="h-4 w-4" /> New Order
+          <Plus className="h-4 w-4" /> Record New Sale
         </Button>
       </div>
 
@@ -287,7 +383,7 @@ export function Orders() {
       <div className="flex gap-3 flex-wrap">
         <div className="flex-1 min-w-[200px]">
           <Input
-            placeholder="Search by customer or order #..."
+            placeholder="Search by customer, attending staff, or order #..."
             icon={<Search className="h-4 w-4" />}
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -316,7 +412,7 @@ export function Orders() {
             <table className="w-full">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {['Order #', 'Customer', 'Total', 'Paid', 'Balance', 'Employee', 'Status', 'Date', ''].map(h => (
+                  {['Order #', 'Customer', 'Total', 'Paid', 'Balance', 'Attending Staff', 'Status', 'Date', ''].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide whitespace-nowrap" style={{ color: 'var(--fg-muted)' }}>
                       {h}
                     </th>
@@ -338,16 +434,28 @@ export function Orders() {
                     <td className="px-4 py-3 text-sm font-medium" style={{ color: 'var(--fg)' }}>{formatCurrency(order.total_amount)}</td>
                     <td className="px-4 py-3 text-sm font-medium text-emerald-600 dark:text-emerald-400">{formatCurrency(order.deposit)}</td>
                     <td className="px-4 py-3 text-sm font-medium text-amber-600 dark:text-amber-400">{formatCurrency(order.balance)}</td>
-                    <td className="px-4 py-3 text-sm" style={{ color: 'var(--fg-muted)' }}>{order.employee?.name || '—'}</td>
+                    <td className="px-4 py-3 text-sm">
+                      {order.employee ? (
+                        <div className="flex items-center gap-1.5 font-medium" style={{ color: 'var(--fg)' }}>
+                          <User className="h-3.5 w-3.5 text-blue-500" />
+                          <span>{order.employee.name}</span>
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--fg-muted)' }}>—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">{statusBadge(order.status)}</td>
                     <td className="px-4 py-3 text-sm whitespace-nowrap" style={{ color: 'var(--fg-subtle)' }}>{formatDate(order.created_at)}</td>
                     <td className="px-4 py-3 text-right">
                       <Link
                         to={`/orders/${order.id}`}
-                        className="text-xs font-medium hover:underline"
-                        style={{ color: 'var(--brand)' }}
+                        className="text-xs font-medium hover:underline px-2.5 py-1 rounded-md border"
+                        style={{
+                          color: 'var(--brand)',
+                          borderColor: 'var(--border)'
+                        }}
                       >
-                        View
+                        View Details
                       </Link>
                     </td>
                   </TrHover>
@@ -356,7 +464,10 @@ export function Orders() {
                   <tr>
                     <td colSpan={9} className="px-5 py-12 text-center">
                       <Package className="h-10 w-10 mx-auto mb-2" style={{ color: 'var(--border-strong)' }} />
-                      <p className="text-sm" style={{ color: 'var(--fg-subtle)' }}>No orders found</p>
+                      <p className="text-sm font-medium" style={{ color: 'var(--fg)' }}>No orders found</p>
+                      <p className="text-xs mt-1" style={{ color: 'var(--fg-muted)' }}>
+                        Record your first sale by clicking "Record New Sale" above
+                      </p>
                     </td>
                   </tr>
                 )}

@@ -1,5 +1,5 @@
 // src/components/auth/PendingVerificationCard.jsx
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../ui/Toast'
@@ -14,8 +14,7 @@ export function PendingVerificationCard() {
   const toast = useToast()
   const navigate = useNavigate()
 
-  const handleCheckStatus = async () => {
-    setChecking(true)
+  const checkStatusSilently = useCallback(async () => {
     try {
       const refreshed = await refreshUser()
       const isVerified = refreshed?.user_metadata?.verified === true ||
@@ -24,7 +23,26 @@ export function PendingVerificationCard() {
       if (isVerified) {
         toast({ type: 'success', message: '🎉 Your account has been verified! Welcome to Curtain World.' })
         navigate('/', { replace: true })
-      } else {
+        return true
+      }
+    } catch {
+      // ignore silent poll error
+    }
+    return false
+  }, [refreshUser, navigate, toast])
+
+  useEffect(() => {
+    // Auto check immediately and every 3 seconds
+    checkStatusSilently()
+    const interval = setInterval(checkStatusSilently, 3000)
+    return () => clearInterval(interval)
+  }, [checkStatusSilently])
+
+  const handleCheckStatus = async () => {
+    setChecking(true)
+    try {
+      const verified = await checkStatusSilently()
+      if (!verified) {
         toast({
           type: 'info',
           message: `Account is still pending verification. The super admin (${SUPER_ADMIN_EMAIL}) must approve and assign your role.`,

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useOrder } from '../hooks/useOrders'
 import { useCreateTransaction, useDeleteTransaction } from '../hooks/useTransactions'
-import { useStaff } from '../hooks/useStaff'
+import { useAllStaff } from '../hooks/useStaff'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
@@ -15,10 +15,9 @@ import { useConfirm } from '../components/ui/ConfirmDialog'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { ArrowLeft, Plus, Download, Trash2, DollarSign } from 'lucide-react'
+import { ArrowLeft, Plus, Download, Trash2, DollarSign, User, ShieldCheck } from 'lucide-react'
 import { formatCurrency, formatDateTime, formatDate, getPaymentMethodLabel } from '../lib/utils'
 import { generateReceiptPDF, downloadPDF } from '../lib/pdf'
-
 import { useAuth } from '../context/AuthContext'
 
 const paymentSchema = z.object({
@@ -33,23 +32,26 @@ const paymentSchema = z.object({
 function AddPaymentModal({ open, onClose, order, defaultType = 'payment' }) {
   const toast = useToast()
   const { user, fullName } = useAuth()
-  const { data: cashiers } = useStaff('cashier')
-  const { data: employees } = useStaff('employee')
+  const { data: staffList } = useAllStaff()
   const createTxn = useCreateTransaction()
 
-  const matchedCashier = cashiers?.find(c => c.id === user?.id || c.name === fullName)
+  const activeStaff = (staffList || []).filter(s => s.active !== false)
+  const adminStaff = activeStaff.find(s => s.id === user?.id || s.email === user?.email || s.role === 'super_admin' || s.role === 'admin')
 
-  const { register, handleSubmit, formState: { errors }, reset } = useForm({
+  const { register, handleSubmit, watch, formState: { errors, isSubmitting }, reset } = useForm({
     resolver: zodResolver(paymentSchema),
     values: {
       type: defaultType,
-      payment_method: 'momo',
+      payment_method: 'cash',
       amount: order?.balance ?? '',
-      cashier_id: matchedCashier?.id || order?.cashier_id || '',
+      cashier_id: adminStaff?.id || user?.id || order?.cashier_id || '',
       employee_id: order?.employee_id || '',
       notes: '',
     },
   })
+
+  const enteredAmount = Number(watch('amount') || 0)
+  const newBalance = Math.max(0, (Number(order?.balance) || 0) - enteredAmount)
 
   const onSubmit = async (data) => {
     try {
@@ -57,7 +59,7 @@ function AddPaymentModal({ open, onClose, order, defaultType = 'payment' }) {
         order_id: order.id,
         customer_id: order.customer_id,
         employee_id: data.employee_id || order.employee_id || null,
-        cashier_id: data.cashier_id || order.cashier_id || null,
+        cashier_id: data.cashier_id || adminStaff?.id || user?.id || order.cashier_id || null,
         type: data.type,
         amount: data.amount,
         payment_method: data.payment_method,
@@ -76,13 +78,13 @@ function AddPaymentModal({ open, onClose, order, defaultType = 'payment' }) {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <Select label="Type *" {...register('type')}>
-            <option value="deposit">Deposit</option>
             <option value="payment">Payment</option>
+            <option value="deposit">Deposit</option>
           </Select>
           <Select label="Payment Method *" {...register('payment_method')}>
+            <option value="cash">Cash (Default)</option>
             <option value="momo">MTN MoMo</option>
             <option value="airtel">Airtel Money</option>
-            <option value="cash">Cash</option>
             <option value="bank">Bank Transfer</option>
             <option value="card">Card / POS</option>
             <option value="other">Other</option>
@@ -99,19 +101,38 @@ function AddPaymentModal({ open, onClose, order, defaultType = 'payment' }) {
           {...register('amount')}
         />
 
+        {/* Live Balance Card */}
+        <div
+          className="p-3 rounded-lg border grid grid-cols-2 gap-2 text-center text-xs"
+          style={{ background: 'var(--surface-hover)', borderColor: 'var(--border)' }}
+        >
+          <div>
+            <span style={{ color: 'var(--fg-muted)' }}>Current Balance Owed:</span>
+            <p className="font-bold text-sm text-amber-600 dark:text-amber-400 mt-0.5">
+              {formatCurrency(order?.balance || 0)}
+            </p>
+          </div>
+          <div>
+            <span style={{ color: 'var(--fg-muted)' }}>Balance After Payment:</span>
+            <p className={`font-bold text-sm mt-0.5 ${newBalance === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+              {formatCurrency(newBalance)}
+            </p>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
-          <Select label="Employee" {...register('employee_id')}>
+          <Select label="Attending Staff" {...register('employee_id')}>
             <option value="">— Same as order —</option>
-            {(employees || []).map(s => (
+            {activeStaff.map(s => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </Select>
-          <Select label="Cashier" {...register('cashier_id')}>
-            <option value="">— Same as order —</option>
-            {(cashiers || []).map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </Select>
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--fg)' }}>Cashier</label>
+            <div className="px-3 py-2 rounded-lg border text-sm font-medium bg-zinc-50 dark:bg-zinc-900/50" style={{ borderColor: 'var(--border)', color: 'var(--fg)' }}>
+              {fullName || 'Admin & Cashier'}
+            </div>
+          </div>
         </div>
 
         <div>
@@ -271,12 +292,15 @@ export function OrderDetail() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase" style={{ color: 'var(--fg-muted)' }}>Employee</p>
-                <p className="text-sm mt-0.5" style={{ color: 'var(--fg)' }}>{order.employee?.name || '—'}</p>
+                <p className="text-xs font-semibold uppercase" style={{ color: 'var(--fg-muted)' }}>Attending Staff</p>
+                <p className="text-sm font-medium mt-0.5" style={{ color: 'var(--fg)' }}>{order.employee?.name || '—'}</p>
+                {order.employee?.role && (
+                  <span className="text-[10px] capitalize" style={{ color: 'var(--fg-muted)' }}>({order.employee.role})</span>
+                )}
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase" style={{ color: 'var(--fg-muted)' }}>Cashier</p>
-                <p className="text-sm mt-0.5" style={{ color: 'var(--fg)' }}>{order.cashier?.name || '—'}</p>
+                <p className="text-sm font-medium mt-0.5" style={{ color: 'var(--fg)' }}>{order.cashier?.name || 'Admin & Cashier'}</p>
               </div>
             </div>
             {order.notes && (

@@ -8,7 +8,6 @@ import { SidebarProvider } from './context/SidebarContext'
 import { ProtectedRoute, PublicOnlyRoute } from './components/auth/ProtectedRoute'
 import { Layout } from './components/layout/Layout'
 import { Login } from './pages/Login'
-import { Register } from './pages/Register'
 import { ForgotPassword } from './pages/ForgotPassword'
 import { Dashboard } from './pages/Dashboard'
 import { Customers } from './pages/Customers'
@@ -39,8 +38,8 @@ export default function App() {
                   {/* Public-only Auth Routes */}
                   <Route element={<PublicOnlyRoute />}>
                     <Route path="/login" element={<Login />} />
-                    <Route path="/signup" element={<Register />} />
-                    <Route path="/register" element={<Register />} />
+                    <Route path="/signup" element={<Navigate to="/login" replace />} />
+                    <Route path="/register" element={<Navigate to="/login" replace />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />
                   </Route>
 

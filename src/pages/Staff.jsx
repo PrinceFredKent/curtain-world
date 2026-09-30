@@ -4,10 +4,8 @@ import {
   useAllStaff,
   useCreateStaff,
   useUpdateStaff,
-  useVerifyStaff,
-  useRejectStaff,
+  useDeleteStaff,
 } from '../hooks/useStaff'
-import { useAuth } from '../context/AuthContext'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
@@ -22,97 +20,155 @@ import { z } from 'zod'
 import {
   Plus,
   Edit2,
-  UserCheck,
-  UserCog,
-  ShieldCheck,
-  Crown,
-  Clock,
-  CheckCircle2,
   Trash2,
-  Mail,
   Phone,
-  Calendar,
+  Mail,
+  Search,
+  Users,
+  ShieldCheck,
+  Scissors,
+  Wrench,
+  ShoppingBag,
+  RefreshCw,
 } from 'lucide-react'
-import { formatDate } from '../lib/utils'
-import { SUPER_ADMIN_EMAIL } from '../lib/supabase'
 
-const schema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string().email('Valid email is required').optional().or(z.literal('')),
-  phone: z.string().optional(),
-  role: z.enum(['employee', 'cashier', 'both', 'admin', 'workshop', 'installer']),
+const staffSchema = z.object({
+  name: z.string().min(2, 'Full name is required (at least 2 characters)'),
+  phone: z.string().min(4, 'Phone number is required'),
+  role: z.enum(['employee', 'workshop', 'installer', 'cashier', 'admin', 'both']),
+  email: z.string().email('Invalid email address').optional().or(z.literal('')),
+  active: z.boolean().default(true),
 })
 
-const ASSIGNABLE_ROLES = [
-  { value: 'employee', label: 'Sales Employee (Orders & Customers)' },
-  { value: 'cashier', label: 'Cashier (POS & Payments)' },
-  { value: 'both', label: 'Sales & Cashier (Full Operations)' },
-  { value: 'admin', label: 'Store Admin (Store Management)' },
-  { value: 'workshop', label: 'Workshop / Tailor (Fulfilment)' },
-  { value: 'installer', label: 'Installer (Measurements & Fitting)' },
+const STAFF_ROLES = [
+  { value: 'employee', label: 'Sales Representative (Attends Clients & Orders)' },
+  { value: 'workshop', label: 'Workshop / Tailor (Sewing & Curtain Making)' },
+  { value: 'installer', label: 'Curtain Installer (Measurements & Fitting)' },
+  { value: 'both', label: 'Sales & Workshop (Multi-role)' },
+  { value: 'cashier', label: 'Cashier Assistant' },
+  { value: 'admin', label: 'Store Manager / Admin' },
 ]
 
-function StaffForm({ defaultValues, onSubmit, loading, isEditing = false }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({
-    resolver: zodResolver(schema),
-    defaultValues: defaultValues || { role: 'both' },
-  })
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <Input
-        label="Full Name *"
-        placeholder="Staff member name"
-        error={errors.name?.message}
-        {...register('name')}
-      />
-      <Input
-        label="Email Address"
-        type="email"
-        placeholder="staff@curtainworld.ug"
-        error={errors.email?.message}
-        {...register('email')}
-      />
-      <Input
-        label="Phone Number"
-        placeholder="+256 700 000 000"
-        error={errors.phone?.message}
-        {...register('phone')}
-      />
-      <Select label="Staff Role *" error={errors.role?.message} {...register('role')}>
-        {ASSIGNABLE_ROLES.map(r => (
-          <option key={r.value} value={r.value}>{r.label}</option>
-        ))}
-      </Select>
-      <div className="flex justify-end gap-3 pt-2">
-        <Button type="submit" loading={loading}>
-          {isEditing ? 'Save Changes' : 'Create & Verify Staff'}
-        </Button>
-      </div>
-    </form>
-  )
-}
-
-const roleColors = {
-  super_admin: 'amber',
-  admin: 'indigo',
+const roleBadgeColors = {
   employee: 'blue',
+  workshop: 'purple',
+  installer: 'indigo',
+  both: 'amber',
   cashier: 'green',
-  both: 'purple',
-  workshop: 'orange',
-  installer: 'cyan',
-  pending: 'yellow',
+  admin: 'rose',
+  super_admin: 'amber',
 }
 
 const roleLabels = {
-  super_admin: 'Super Admin',
-  admin: 'Store Admin',
-  employee: 'Sales Employee',
-  cashier: 'Cashier',
-  both: 'Sales & Cashier',
+  employee: 'Sales Representative',
   workshop: 'Workshop / Tailor',
   installer: 'Installer',
-  pending: 'Pending Verification',
+  both: 'Sales & Workshop',
+  cashier: 'Cashier Assistant',
+  admin: 'Store Manager',
+  super_admin: 'Super Admin & Cashier',
+}
+
+function StaffFormModal({ open, onClose, initialData, isEditing = false }) {
+  const toast = useToast()
+  const createStaff = useCreateStaff()
+  const updateStaff = useUpdateStaff()
+
+  const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm({
+    resolver: zodResolver(staffSchema),
+    defaultValues: initialData || {
+      name: '',
+      phone: '',
+      role: 'employee',
+      email: '',
+      active: true,
+    },
+  })
+
+  const onSubmit = async (data) => {
+    try {
+      if (isEditing && initialData?.id) {
+        await updateStaff.mutateAsync({
+          id: initialData.id,
+          name: data.name,
+          phone: data.phone,
+          role: data.role,
+          email: data.email || null,
+          active: data.active,
+          verified: true,
+          status: data.active ? 'active' : 'inactive',
+        })
+        toast({ type: 'success', message: `${data.name} updated successfully!` })
+      } else {
+        await createStaff.mutateAsync({
+          name: data.name,
+          phone: data.phone,
+          role: data.role,
+          email: data.email || null,
+          active: true,
+          verified: true,
+          status: 'active',
+        })
+        toast({ type: 'success', message: `${data.name} added to staff roster!` })
+      }
+      reset()
+      onClose()
+    } catch (err) {
+      toast({ type: 'error', message: err.message || 'Failed to save staff member.' })
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={isEditing ? `Edit Staff Member — ${initialData?.name}` : 'Add New Staff Member'}
+      size="md"
+    >
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <p className="text-xs" style={{ color: 'var(--fg-muted)' }}>
+          Staff members added here can be assigned to customer orders, sales attributions, and commission reports.
+        </p>
+
+        <Input
+          label="Full Name *"
+          placeholder="e.g. Prince Mukasa"
+          error={errors.name?.message}
+          {...register('name')}
+        />
+
+        <Input
+          label="Phone Number *"
+          placeholder="e.g. 0772 000 000"
+          error={errors.phone?.message}
+          {...register('phone')}
+        />
+
+        <Select label="Staff Role / Department *" error={errors.role?.message} {...register('role')}>
+          {STAFF_ROLES.map(r => (
+            <option key={r.value} value={r.value}>{r.label}</option>
+          ))}
+        </Select>
+
+        <Input
+          label="Email Address (Optional)"
+          type="email"
+          placeholder="e.g. staff@curtainworld.ug"
+          error={errors.email?.message}
+          {...register('email')}
+        />
+
+        <div className="flex items-center justify-end gap-3 pt-3 border-t" style={{ borderColor: 'var(--border)' }}>
+          <Button variant="secondary" type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" loading={isSubmitting}>
+            {isEditing ? 'Save Changes' : 'Add Staff Member'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
 }
 
 function TrHover({ children, ...props }) {
@@ -129,132 +185,67 @@ function TrHover({ children, ...props }) {
 }
 
 export function Staff() {
-  const [showCreate, setShowCreate] = useState(false)
-  const [editStaff, setEditStaff] = useState(null)
-  const [selectedRoles, setSelectedRoles] = useState({})
-  const [verifyingId, setVerifyingId] = useState(null)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [editingStaff, setEditingStaff] = useState(null)
+  const [search, setSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState('all')
 
-  const { isSuperAdmin } = useAuth()
-  const { data: staff, isLoading } = useAllStaff()
-  const createMutation = useCreateStaff()
-  const updateMutation = useUpdateStaff()
-  const verifyMutation = useVerifyStaff()
-  const deleteMutation = useRejectStaff()
+  const { data: staffList, isLoading, refetch, isFetching } = useAllStaff()
+  const deleteStaff = useDeleteStaff()
+  const updateStaff = useUpdateStaff()
   const toast = useToast()
   const confirm = useConfirm()
 
-  const handleCreate = async (data) => {
+  const allStaff = staffList || []
+
+  const filteredStaff = allStaff.filter(s => {
+    const matchesSearch = !search ||
+      s.name?.toLowerCase().includes(search.toLowerCase()) ||
+      s.phone?.toLowerCase().includes(search.toLowerCase()) ||
+      s.email?.toLowerCase().includes(search.toLowerCase())
+
+    const matchesRole = roleFilter === 'all' || s.role === roleFilter
+    return matchesSearch && matchesRole
+  })
+
+  const salesCount = allStaff.filter(s => s.role === 'employee' || s.role === 'both').length
+  const workshopCount = allStaff.filter(s => s.role === 'workshop' || s.role === 'both').length
+  const installerCount = allStaff.filter(s => s.role === 'installer').length
+
+  const handleDelete = async (staffMember) => {
+    const confirmed = await confirm({
+      title: `Remove ${staffMember.name}?`,
+      message: `Are you sure you want to remove ${staffMember.name} from the staff list? Past order history and sales records will remain preserved.`,
+      confirmText: 'Remove Staff',
+      variant: 'destructive',
+    })
+
+    if (!confirmed) return
+
     try {
-      await createMutation.mutateAsync({
-        ...data,
-        verified: true,
-        active: true,
-        status: 'active',
+      await deleteStaff.mutateAsync(staffMember.id)
+      toast({ type: 'success', message: `${staffMember.name} removed from roster.` })
+    } catch (err) {
+      toast({ type: 'error', message: err.message || 'Failed to remove staff member.' })
+    }
+  }
+
+  const handleToggleStatus = async (staffMember) => {
+    const newActive = !staffMember.active
+    try {
+      await updateStaff.mutateAsync({
+        id: staffMember.id,
+        active: newActive,
+        status: newActive ? 'active' : 'inactive',
       })
-      toast({ type: 'success', message: 'Staff member added and verified' })
-      setShowCreate(false)
-    } catch (err) {
-      toast({ type: 'error', message: err.message })
-    }
-  }
-
-  const handleUpdate = async (data) => {
-    try {
-      await updateMutation.mutateAsync({ id: editStaff.id, ...data })
-      toast({ type: 'success', message: 'Staff updated successfully' })
-      setEditStaff(null)
-    } catch (err) {
-      toast({ type: 'error', message: err.message })
-    }
-  }
-
-  const handleVerify = async (member) => {
-    const assignedRole = selectedRoles[member.id] || member.role || 'employee'
-    setVerifyingId(member.id)
-    try {
-      await verifyMutation.mutateAsync({ id: member.id, role: assignedRole })
       toast({
         type: 'success',
-        message: `${member.name} verified and assigned role: ${roleLabels[assignedRole] || assignedRole}`,
+        message: `${staffMember.name} marked as ${newActive ? 'Active' : 'Inactive'}.`,
       })
     } catch (err) {
-      toast({ type: 'error', message: err.message || 'Verification failed' })
-    } finally {
-      setVerifyingId(null)
+      toast({ type: 'error', message: err.message || 'Could not update status.' })
     }
   }
-
-  const handleReject = async (member) => {
-    const confirmed = await confirm({
-      title: 'Reject Registration',
-      message: `Are you sure you want to reject the registration application for ${member.name}?`,
-      confirmText: 'Reject Registration',
-      cancelText: 'Keep Pending',
-      variant: 'danger',
-      itemDetails: {
-        label: 'Applicant',
-        value: member.name,
-        subtext: member.email || member.phone || 'No direct contact info',
-        badge: 'Pending Verification',
-      },
-      warningNote: 'This applicant account will be deleted and will not be able to log in or access the system.',
-    })
-
-    if (!confirmed) return
-
-    try {
-      await deleteMutation.mutateAsync(member.id)
-      toast({ type: 'info', message: `Registration for ${member.name} was rejected.` })
-    } catch (err) {
-      toast({ type: 'error', message: err.message })
-    }
-  }
-
-  const handleRemove = async (member) => {
-    if (member.role === 'super_admin' || member.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
-      toast({ type: 'error', message: 'The Super Admin account cannot be removed.' })
-      return
-    }
-
-    const confirmed = await confirm({
-      title: 'Remove Staff Member',
-      message: `Are you sure you want to remove ${member.name} from staff? This will immediately revoke their store and system access.`,
-      confirmText: 'Remove Staff',
-      cancelText: 'Cancel',
-      variant: 'danger',
-      itemDetails: {
-        label: 'Staff Member',
-        value: member.name,
-        subtext: member.email || member.phone || 'No direct contact info',
-        badge: roleLabels[member.role] || member.role || 'Staff',
-      },
-      warningNote: 'All active sessions and privileges for this staff member will be permanently revoked.',
-    })
-
-    if (!confirmed) return
-
-    try {
-      await deleteMutation.mutateAsync(member.id)
-      toast({ type: 'success', message: `${member.name} removed successfully` })
-    } catch (err) {
-      toast({ type: 'error', message: err.message })
-    }
-  }
-
-  const allStaff = staff || []
-
-  // Categorize
-  const pending = allStaff.filter(
-    s => s.verified === false || s.status === 'pending_verification' || !s.role || s.role === 'pending'
-  )
-
-  const active = allStaff.filter(
-    s => s.active && s.verified !== false && s.role && s.role !== 'pending' && s.status !== 'pending_verification'
-  )
-
-  const inactive = allStaff.filter(
-    s => !s.active && s.verified !== false && s.role && s.role !== 'pending' && s.status !== 'pending_verification'
-  )
 
   return (
     <div className="space-y-6">
@@ -263,398 +254,308 @@ export function Staff() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--fg)' }}>
-              Staff & Role Management
+              Staff & Team Management
             </h1>
-            {isSuperAdmin && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                <Crown className="h-3 w-3" />
-                Super Admin Panel
-              </span>
-            )}
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Admin & Cashier Portal
+            </span>
           </div>
           <p className="text-sm mt-1" style={{ color: 'var(--fg-muted)' }}>
-            {active.length} active verified members {pending.length > 0 && `• ${pending.length} pending verification`}
+            Manage sales representatives, tailors, and installers assigned to customer orders
           </p>
         </div>
 
-        <Button onClick={() => setShowCreate(true)}>
-          <Plus className="h-4 w-4" /> Add Staff Member
-        </Button>
-      </div>
-
-      {/* Super Admin Notice Card */}
-      <div
-        className="p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs"
-        style={{
-          backgroundColor: 'var(--surface)',
-          borderColor: 'var(--border)',
-        }}
-      >
-        <div className="flex items-center gap-3">
-          <div
-            className="h-9 w-9 rounded-xl flex items-center justify-center font-bold shrink-0"
-            style={{ backgroundColor: 'var(--brand-light)', color: 'var(--brand)' }}
+        <div className="flex items-center gap-2.5">
+          <Button
+            variant="secondary"
+            onClick={() => refetch()}
+            loading={isFetching}
+            className="text-xs"
+            title="Sync latest roster"
           >
-            <ShieldCheck className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="font-semibold text-sm" style={{ color: 'var(--fg)' }}>
-              Super Admin Control: <span className="font-mono text-xs">{SUPER_ADMIN_EMAIL}</span>
-            </p>
-            <p className="text-[11px] mt-0.5" style={{ color: 'var(--fg-muted)' }}>
-              Staff roles are hidden during registration. New signups enter the pending pool below until you assign their role.
-            </p>
-          </div>
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+            Sync
+          </Button>
+          <Button onClick={() => setShowAddModal(true)}>
+            <Plus className="h-4 w-4" /> Add Staff Member
+          </Button>
         </div>
-
-        {pending.length > 0 ? (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500 text-white shrink-0 shadow-xs">
-            <Clock className="h-3.5 w-3.5 animate-pulse" />
-            {pending.length} Action Required
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/20 shrink-0">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            All staff verified
-          </span>
-        )}
       </div>
 
-      {/* PENDING VERIFICATIONS SECTION */}
-      {isSuperAdmin && (
-        <Card
-          className="shadow-sm overflow-hidden"
-          style={{
-            borderColor: pending.length > 0 ? '#f59e0b' : 'var(--border)',
-            borderWidth: pending.length > 0 ? '2px' : '1px',
-          }}
-        >
-          <div
-            className="px-5 py-4 border-b flex items-center justify-between flex-wrap gap-2"
-            style={{
-              backgroundColor: pending.length > 0 ? 'rgba(245, 158, 11, 0.08)' : 'var(--surface)',
-              borderColor: 'var(--border)',
-            }}
-          >
-            <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-amber-500" />
-              <div>
-                <h2 className="font-semibold text-base" style={{ color: 'var(--fg)' }}>
-                  Pending Staff Verifications & Role Assignment
-                </h2>
-                <p className="text-xs" style={{ color: 'var(--fg-muted)' }}>
-                  Review newly registered staff, assign their operational role, and grant store access
-                </p>
-              </div>
+      {/* Metrics Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <Card className="p-4 shadow-xs" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold shrink-0">
+              <Users className="h-5 w-5" />
             </div>
-            <Badge variant={pending.length > 0 ? 'warning' : 'default'} className="px-2.5 py-1 text-xs">
-              {pending.length} Waiting Verification
-            </Badge>
+            <div>
+              <p className="text-xs font-medium" style={{ color: 'var(--fg-muted)' }}>Total Team</p>
+              <p className="text-xl font-bold mt-0.5" style={{ color: 'var(--fg)' }}>{allStaff.length}</p>
+            </div>
           </div>
-
-          <CardContent className="p-5">
-            {pending.length === 0 ? (
-              <div className="py-8 text-center space-y-2">
-                <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-500 opacity-80" />
-                <p className="font-medium text-sm" style={{ color: 'var(--fg)' }}>
-                  No Pending Staff Verifications
-                </p>
-                <p className="text-xs max-w-md mx-auto" style={{ color: 'var(--fg-muted)' }}>
-                  When a new employee registers on the sign-up page, their application will appear here for you to verify and assign their staff role.
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4">
-                {pending.map(applicant => {
-                  const roleChoice = selectedRoles[applicant.id] || 'employee'
-                  const isVerifying = verifyingId === applicant.id
-
-                  return (
-                    <div
-                      key={applicant.id}
-                      className="p-4 rounded-xl border flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 transition-all"
-                      style={{
-                        backgroundColor: 'var(--card)',
-                        borderColor: 'var(--border)',
-                      }}
-                    >
-                      {/* Left: Applicant info */}
-                      <div className="flex items-start gap-3.5 min-w-0">
-                        <div
-                          className="h-11 w-11 rounded-full flex items-center justify-center font-bold text-base shrink-0"
-                          style={{
-                            backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                            color: '#d97706',
-                          }}
-                        >
-                          {applicant.name?.charAt(0).toUpperCase() || 'U'}
-                        </div>
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-sm" style={{ color: 'var(--fg)' }}>
-                              {applicant.name}
-                            </span>
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-700 dark:text-amber-300">
-                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                              Pending Verification
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-3 text-xs flex-wrap" style={{ color: 'var(--fg-muted)' }}>
-                            {applicant.email && (
-                              <span className="flex items-center gap-1">
-                                <Mail className="h-3 w-3" />
-                                {applicant.email}
-                              </span>
-                            )}
-                            {applicant.phone && (
-                              <span className="flex items-center gap-1">
-                                <Phone className="h-3 w-3" />
-                                {applicant.phone}
-                              </span>
-                            )}
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {formatDate(applicant.created_at)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Right: Role selection & action */}
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:w-auto shrink-0">
-                        <div className="w-full sm:w-60">
-                          <label className="block text-[11px] font-semibold mb-1" style={{ color: 'var(--fg-muted)' }}>
-                            Assign Role:
-                          </label>
-                          <select
-                            value={roleChoice}
-                            onChange={e => setSelectedRoles({ ...selectedRoles, [applicant.id]: e.target.value })}
-                            className="w-full rounded-lg border px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2"
-                            style={{
-                              backgroundColor: 'var(--surface)',
-                              color: 'var(--fg)',
-                              borderColor: 'var(--border-strong)',
-                            }}
-                          >
-                            {ASSIGNABLE_ROLES.map(r => (
-                              <option key={r.value} value={r.value}>{r.label}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="flex items-center gap-2 pt-0 sm:pt-4">
-                          <Button
-                            onClick={() => handleVerify(applicant)}
-                            loading={isVerifying}
-                            size="sm"
-                            className="flex items-center gap-1.5 text-xs font-semibold whitespace-nowrap"
-                          >
-                            <UserCheck className="h-3.5 w-3.5" />
-                            Verify & Set Role
-                          </Button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleReject(applicant)}
-                            className="p-2 rounded-lg border text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
-                            style={{ borderColor: 'var(--border)' }}
-                            title="Reject Registration"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </CardContent>
         </Card>
-      )}
 
-      {/* ACTIVE STAFF TABLE */}
-      <Card>
-        <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
-          <h3 className="font-semibold text-base" style={{ color: 'var(--fg)' }}>
-            Active Staff Members ({active.length})
-          </h3>
-          <span className="text-xs" style={{ color: 'var(--fg-muted)' }}>
-            Verified accounts with active store access
-          </span>
+        <Card className="p-4 shadow-xs" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold shrink-0">
+              <ShoppingBag className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium" style={{ color: 'var(--fg-muted)' }}>Sales Reps</p>
+              <p className="text-xl font-bold mt-0.5" style={{ color: 'var(--fg)' }}>{salesCount}</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4 shadow-xs" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold shrink-0">
+              <Scissors className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium" style={{ color: 'var(--fg-muted)' }}>Workshop & Tailors</p>
+              <p className="text-xl font-bold mt-0.5" style={{ color: 'var(--fg)' }}>{workshopCount}</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4 shadow-xs" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold shrink-0">
+              <Wrench className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium" style={{ color: 'var(--fg-muted)' }}>Installers</p>
+              <p className="text-xl font-bold mt-0.5" style={{ color: 'var(--fg)' }}>{installerCount}</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Main Table Card */}
+      <Card className="shadow-sm overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+        {/* Search & Filter bar */}
+        <div
+          className="p-4 border-b flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3"
+          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+        >
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: 'var(--fg-muted)' }} />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search staff by name, phone, email..."
+              className="w-full pl-9 pr-4 py-2 rounded-lg border text-xs focus:outline-none focus:ring-2"
+              style={{
+                backgroundColor: 'var(--card)',
+                borderColor: 'var(--border-strong)',
+                color: 'var(--fg)',
+              }}
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <select
+              value={roleFilter}
+              onChange={e => setRoleFilter(e.target.value)}
+              className="rounded-lg border px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2"
+              style={{
+                backgroundColor: 'var(--card)',
+                borderColor: 'var(--border-strong)',
+                color: 'var(--fg)',
+              }}
+            >
+              <option value="all">All Roles</option>
+              <option value="employee">Sales Representatives</option>
+              <option value="workshop">Workshop / Tailors</option>
+              <option value="installer">Installers</option>
+              <option value="both">Sales & Workshop</option>
+              <option value="cashier">Cashiers</option>
+              <option value="admin">Admins</option>
+            </select>
+          </div>
         </div>
 
-        {isLoading ? (
-          <CardContent>
-            <div className="animate-pulse space-y-3 py-3">
-              {[1, 2, 3].map(i => <div key={i} className="h-12 rounded-lg" style={{ background: 'var(--surface-hover)' }} />)}
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-8 text-center space-y-3">
+              <RefreshCw className="h-6 w-6 mx-auto animate-spin" style={{ color: 'var(--brand)' }} />
+              <p className="text-xs" style={{ color: 'var(--fg-muted)' }}>Loading staff roster...</p>
             </div>
-          </CardContent>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {['Name & Contact', 'Role', 'Status', 'Date Joined', 'Actions'].map(h => (
-                    <th
-                      key={h}
-                      className={`px-5 py-3 text-xs font-semibold uppercase ${h === 'Actions' ? 'text-right' : 'text-left'}`}
-                      style={{ color: 'var(--fg-muted)' }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {active.map((member, idx) => {
-                  const isSuper = member.role === 'super_admin' || member.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()
+          ) : filteredStaff.length === 0 ? (
+            <div className="p-12 text-center space-y-3">
+              <Users className="h-10 w-10 mx-auto" style={{ color: 'var(--fg-muted)', opacity: 0.5 }} />
+              <p className="font-semibold text-sm" style={{ color: 'var(--fg)' }}>
+                {search ? 'No staff members match your search' : 'No staff members added yet'}
+              </p>
+              <p className="text-xs max-w-sm mx-auto" style={{ color: 'var(--fg-muted)' }}>
+                {search
+                  ? 'Try changing your search query or role filter.'
+                  : 'Add your sales reps, tailors, and installers so you can attribute sales and orders to them.'}
+              </p>
+              {!search && (
+                <Button onClick={() => setShowAddModal(true)} className="mt-2">
+                  <Plus className="h-4 w-4" /> Add First Staff Member
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr
+                    className="border-b text-[11px] font-semibold uppercase tracking-wider"
+                    style={{
+                      backgroundColor: 'var(--surface)',
+                      borderColor: 'var(--border)',
+                      color: 'var(--fg-muted)',
+                    }}
+                  >
+                    <th className="py-3.5 px-4">Staff Member</th>
+                    <th className="py-3.5 px-4">Role / Department</th>
+                    <th className="py-3.5 px-4">Phone Number</th>
+                    <th className="py-3.5 px-4">Email</th>
+                    <th className="py-3.5 px-4">Status</th>
+                    <th className="py-3.5 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
+                  {filteredStaff.map(member => {
+                    const roleKey = member.role || 'employee'
+                    const badgeVariant = roleBadgeColors[roleKey] || 'default'
+                    const roleName = roleLabels[roleKey] || member.role || 'Staff'
+                    const isSuper = member.role === 'super_admin' || member.email === 'sharityra41@gmail.com'
 
-                  return (
-                    <TrHover key={member.id} style={{ borderTop: idx > 0 ? '1px solid var(--border)' : 'none' }}>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="h-9 w-9 rounded-full flex items-center justify-center font-bold text-sm shrink-0 relative"
-                            style={{
-                              background: isSuper ? 'rgba(245, 158, 11, 0.2)' : 'var(--brand-light)',
-                              color: isSuper ? '#d97706' : 'var(--brand)',
-                            }}
-                          >
-                            {isSuper ? <Crown className="h-4 w-4" /> : member.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium" style={{ color: 'var(--fg)' }}>{member.name}</span>
+                    return (
+                      <TrHover key={member.id}>
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="h-8 w-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0"
+                              style={{
+                                backgroundColor: 'var(--brand-light)',
+                                color: 'var(--brand)',
+                              }}
+                            >
+                              {member.name?.charAt(0).toUpperCase() || 'S'}
+                            </div>
+                            <div>
+                              <div className="font-semibold" style={{ color: 'var(--fg)' }}>
+                                {member.name}
+                              </div>
                               {isSuper && (
-                                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300">
-                                  Super Admin
+                                <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                                  Primary Admin & Cashier
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs" style={{ color: 'var(--fg-muted)' }}>
-                              {member.email || member.phone || 'No direct contact'}
-                            </p>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="px-5 py-3">
-                        <Badge variant={roleColors[member.role] || 'purple'}>
-                          {roleLabels[member.role] || member.role}
-                        </Badge>
-                      </td>
+                        <td className="py-3.5 px-4">
+                          <Badge variant={badgeVariant} className="text-[11px] font-medium">
+                            {roleName}
+                          </Badge>
+                        </td>
 
-                      <td className="px-5 py-3">
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                          Verified
-                        </span>
-                      </td>
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center gap-1.5 font-mono" style={{ color: 'var(--fg)' }}>
+                            <Phone className="h-3 w-3" style={{ color: 'var(--fg-muted)' }} />
+                            {member.phone || '—'}
+                          </div>
+                        </td>
 
-                      <td className="px-5 py-3 text-sm" style={{ color: 'var(--fg-muted)' }}>
-                        {formatDate(member.created_at)}
-                      </td>
-
-                      <td className="px-5 py-3">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            onClick={() => setEditStaff(member)}
-                            className="p-1.5 rounded-lg transition-colors"
-                            style={{ color: 'var(--brand)' }}
-                            onMouseEnter={e => e.currentTarget.style.background = 'var(--brand-light)'}
-                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                            title="Edit Role / Info"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-
-                          {!isSuper && (
-                            <button
-                              onClick={() => handleRemove(member)}
-                              className="p-1.5 rounded-lg transition-colors text-red-500 hover:text-red-600"
-                              onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
-                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                              title="Remove Staff Member"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                        <td className="py-3.5 px-4">
+                          {member.email ? (
+                            <div className="flex items-center gap-1.5" style={{ color: 'var(--fg-muted)' }}>
+                              <Mail className="h-3 w-3" />
+                              {member.email}
+                            </div>
+                          ) : (
+                            <span style={{ color: 'var(--fg-muted)' }}>—</span>
                           )}
-                        </div>
-                      </td>
-                    </TrHover>
-                  )
-                })}
+                        </td>
 
-                {active.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-5 py-10 text-center">
-                      <UserCog className="h-10 w-10 mx-auto mb-2" style={{ color: 'var(--border-strong)' }} />
-                      <p className="text-sm font-medium" style={{ color: 'var(--fg-subtle)' }}>No active verified staff</p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        <td className="py-3.5 px-4">
+                          {member.active !== false ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                              Active
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-500/15 text-zinc-600 dark:text-zinc-400">
+                              <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" />
+                              Inactive
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setEditingStaff(member)}
+                              className="p-1.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                              title="Edit staff details"
+                              style={{ color: 'var(--fg-muted)' }}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </button>
+
+                            {!isSuper && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleStatus(member)}
+                                  className="p-1.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-[11px] font-medium"
+                                  title={member.active ? 'Deactivate staff' : 'Activate staff'}
+                                  style={{ color: member.active ? '#d97706' : '#16a34a' }}
+                                >
+                                  {member.active ? 'Deactivate' : 'Activate'}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(member)}
+                                  className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 transition-colors"
+                                  title="Remove staff member"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </TrHover>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
       </Card>
 
-      {/* INACTIVE STAFF */}
-      {inactive.length > 0 && (
-        <Card>
-          <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
-            <h3 className="font-semibold text-sm" style={{ color: 'var(--fg-muted)' }}>
-              Inactive Staff Members ({inactive.length})
-            </h3>
-          </div>
-          <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
-            {inactive.map(member => (
-              <div key={member.id} className="flex items-center justify-between px-5 py-3 opacity-60">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="h-8 w-8 rounded-full flex items-center justify-center font-semibold text-sm"
-                    style={{ background: 'var(--surface-hover)', color: 'var(--fg-subtle)' }}
-                  >
-                    {member.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium line-through" style={{ color: 'var(--fg)' }}>{member.name}</p>
-                    <Badge variant="default" className="mt-0.5">{roleLabels[member.role] || member.role}</Badge>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleRemove(member)}
-                    className="p-1.5 rounded-lg transition-colors text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40"
-                    title="Remove Staff Member"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
+      {/* Add Staff Modal */}
+      {showAddModal && (
+        <StaffFormModal
+          open={showAddModal}
+          onClose={() => setShowAddModal(false)}
+        />
       )}
 
-      {/* Create Modal */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Add & Verify New Staff">
-        <StaffForm onSubmit={handleCreate} loading={createMutation.isPending} />
-      </Modal>
-
-      {/* Edit Modal */}
-      <Modal open={!!editStaff} onClose={() => setEditStaff(null)} title="Edit Staff Role & Details">
-        {editStaff && (
-          <StaffForm
-            defaultValues={editStaff}
-            onSubmit={handleUpdate}
-            loading={updateMutation.isPending}
-            isEditing
-          />
-        )}
-      </Modal>
+      {/* Edit Staff Modal */}
+      {editingStaff && (
+        <StaffFormModal
+          open={Boolean(editingStaff)}
+          onClose={() => setEditingStaff(null)}
+          initialData={editingStaff}
+          isEditing={true}
+        />
+      )}
     </div>
   )
 }

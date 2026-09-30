@@ -9,13 +9,11 @@ import { useToast } from '../components/ui/Toast'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Lock, UserCheck } from 'lucide-react'
-
-import { SUPER_ADMIN_EMAIL } from '../lib/supabase'
+import { Lock, ShieldCheck } from 'lucide-react'
 
 const loginSchema = z.object({
   identifier: z.string().min(3, 'Enter your email or phone number'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  password: z.string().min(4, 'Enter your password'),
 })
 
 export function Login() {
@@ -38,16 +36,8 @@ export function Login() {
   const onSubmit = async (data) => {
     setLoading(true)
     try {
-      const res = await signIn(data.identifier, data.password)
-      const user = res?.user || res?.data?.user
-      const isSuper = (user?.email || '').toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()
-      const isVerified = isSuper || (user?.user_metadata?.verified === true && user?.user_metadata?.role)
-
-      if (isVerified) {
-        toast({ type: 'success', message: 'Welcome back to Curtain World!' })
-      } else {
-        toast({ type: 'info', message: 'Account logged in. Waiting verification by the super admin.' })
-      }
+      await signIn(data.identifier, data.password)
+      toast({ type: 'success', message: 'Welcome back to Curtain World!' })
       navigate(from, { replace: true })
     } catch (err) {
       toast({ type: 'error', message: err.message || 'Login failed. Check your email/phone and password.' })
@@ -67,11 +57,11 @@ export function Login() {
           >
             <span className="h-2 w-2 rounded-full" style={{ background: 'var(--brand)' }} />
             <span className="text-xs font-bold tracking-wider uppercase" style={{ color: 'var(--brand)' }}>
-              Curtain World Staff Portal
+              Curtain World · POS & Admin System
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight" style={{ color: 'var(--fg)' }}>
-            Sign In to Your Account
+            Admin & Cashier Sign In
           </h1>
           <p className="text-sm italic" style={{ color: 'var(--brand)' }}>
             “For your curtain desires.”
@@ -83,9 +73,9 @@ export function Login() {
           <CardContent className="p-6 sm:p-8 space-y-5">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <Input
-                label="Email / Phone Number"
-                placeholder="e.g. you@curtainworld.ug or 0772 000 000"
-                icon={<UserCheck className="h-4 w-4" />}
+                label="Admin Email or Phone"
+                placeholder="e.g. sharityra41@gmail.com or 0700 000 001"
+                icon={<ShieldCheck className="h-4 w-4" />}
                 error={errors.identifier?.message}
                 {...register('identifier')}
               />
@@ -111,15 +101,12 @@ export function Login() {
               </div>
 
               <Button type="submit" className="w-full h-11 text-base font-semibold" loading={loading}>
-                Sign In
+                Sign In as Admin & Cashier
               </Button>
             </form>
 
-            <div className="pt-2 text-center text-sm" style={{ color: 'var(--fg-muted)' }}>
-              <span>New employee? </span>
-              <Link to="/signup" className="font-semibold hover:underline" style={{ color: 'var(--brand)' }}>
-                Register Account
-              </Link>
+            <div className="pt-2 text-center text-xs" style={{ color: 'var(--fg-muted)' }}>
+              Secure store administration and cashier point-of-sale
             </div>
           </CardContent>
         </Card>

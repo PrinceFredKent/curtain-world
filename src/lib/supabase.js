@@ -19,9 +19,20 @@ export const isLiveSupabase = Boolean(
 )
 
 // In-browser Local Storage Mock Client for instant preview / demo mode
+function notifyDataChanged(key) {
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cw_storage_sync', { detail: { key } }))
+    }
+  } catch {
+    // ignore
+  }
+}
+
 class LocalStorageTable {
   constructor(tableName, initialData) {
     this.key = `cw_${tableName}`
+    this.tableName = tableName
     if (!localStorage.getItem(this.key)) {
       localStorage.setItem(this.key, JSON.stringify(initialData))
     }
@@ -29,7 +40,69 @@ class LocalStorageTable {
 
   getAll() {
     try {
-      return JSON.parse(localStorage.getItem(this.key)) || []
+      let data = JSON.parse(localStorage.getItem(this.key)) || []
+      if (this.tableName === 'staff') {
+        const deletedIds = JSON.parse(localStorage.getItem('cw_deleted_staff_ids') || '[]')
+        const customUsers = JSON.parse(localStorage.getItem('cw_custom_users') || '[]')
+        
+        // Remove any deleted items
+        if (deletedIds.length > 0) {
+          data = data.filter(s => !deletedIds.includes(s.id) && !deletedIds.includes(s.email?.toLowerCase()))
+        }
+
+        let modified = false
+        // Merge registered accounts from custom users
+        for (const u of customUsers) {
+          const email = (u.email || '').toLowerCase().trim()
+          if (deletedIds.includes(u.id) || (email && deletedIds.includes(email))) {
+            continue
+          }
+
+          const existingIdx = data.findIndex(
+            s => (s.id && s.id === u.id) || (s.email && s.email.toLowerCase().trim() === email)
+          )
+
+          if (existingIdx === -1) {
+            const isSuper = email === SUPER_ADMIN_EMAIL.toLowerCase()
+            const role = isSuper ? 'super_admin' : (u.user_metadata?.role || u.role || null)
+            const verified = isSuper ? true : Boolean(u.user_metadata?.verified || u.verified || false)
+            const status = isSuper ? 'active' : (u.user_metadata?.status || (verified ? 'active' : 'pending_verification'))
+
+            data.push({
+              id: u.id || generateUUID(),
+              name: u.user_metadata?.full_name || u.name || (email ? email.split('@')[0] : 'Staff Member'),
+              email: u.email || '',
+              phone: u.phone || u.user_metadata?.phone || '',
+              role: role,
+              active: isSuper ? true : Boolean(u.active ?? (verified && role && role !== 'pending')),
+              verified: verified,
+              status: status,
+              created_at: u.created_at || u.user_metadata?.registered_at || new Date().toISOString(),
+            })
+            modified = true
+          } else {
+            // Keep role and verified status synced from user_metadata if changed
+            const current = data[existingIdx]
+            const metaRole = u.user_metadata?.role
+            const metaVerified = u.user_metadata?.verified
+            if (metaRole !== undefined && metaRole !== current.role) {
+              current.role = metaRole
+              modified = true
+            }
+            if (metaVerified !== undefined && metaVerified !== current.verified) {
+              current.verified = metaVerified
+              current.status = metaVerified ? 'active' : 'pending_verification'
+              current.active = Boolean(metaVerified && current.role && current.role !== 'pending')
+              modified = true
+            }
+          }
+        }
+
+        if (modified) {
+          localStorage.setItem(this.key, JSON.stringify(data))
+        }
+      }
+      return data
     } catch {
       return []
     }
@@ -37,6 +110,7 @@ class LocalStorageTable {
 
   saveAll(data) {
     localStorage.setItem(this.key, JSON.stringify(data))
+    notifyDataChanged(this.key)
   }
 }
 
@@ -67,6 +141,7 @@ export function syncStaffUpdateToAuth(staffRec) {
     })
     if (userChanged) {
       localStorage.setItem('cw_custom_users', JSON.stringify(nextUsers))
+      notifyDataChanged('cw_custom_users')
     }
 
     const sessionRaw = localStorage.getItem('cw_auth_session')
@@ -86,6 +161,7 @@ export function syncStaffUpdateToAuth(staffRec) {
           }
         }
         localStorage.setItem('cw_auth_session', JSON.stringify(updatedSession))
+        notifyDataChanged('cw_auth_session')
         authListeners.forEach(cb => cb('USER_UPDATED', { user: updatedSession }))
       }
     }
@@ -267,9 +343,17 @@ class MockQueryBuilder {
 
       if (this.table === 'staff') {
         try {
+          const deletedIds = JSON.parse(localStorage.getItem('cw_deleted_staff_ids') || '[]')
+          for (const d of deletedItems) {
+            if (d.id && !deletedIds.includes(d.id)) deletedIds.push(d.id)
+            if (d.email && !deletedIds.includes(d.email.toLowerCase())) deletedIds.push(d.email.toLowerCase())
+          }
+          localStorage.setItem('cw_deleted_staff_ids', JSON.stringify(deletedIds))
+
           const customUsers = JSON.parse(localStorage.getItem('cw_custom_users') || '[]')
           const filteredUsers = customUsers.filter(u => !deletedItems.some(d => d.id === u.id || (d.email && d.email.toLowerCase() === u.email?.toLowerCase())))
           localStorage.setItem('cw_custom_users', JSON.stringify(filteredUsers))
+          notifyDataChanged('cw_custom_users')
         } catch {
           // ignore
         }
@@ -347,7 +431,22 @@ class MockQueryBuilder {
     const current = storage.getAll()
     const records = Array.isArray(recordOrRecords) ? recordOrRecords : [recordOrRecords]
 
-    const newRecords = records.map(rec => {
+    const newRecords = []
+    let updated = [...current]
+
+    if (this.table === 'staff') {
+      try {
+        const deletedIds = JSON.parse(localStorage.getItem('cw_deleted_staff_ids') || '[]')
+        const emailsToUnDelete = records.map(r => r.email?.toLowerCase()).filter(Boolean)
+        const idsToUnDelete = records.map(r => r.id).filter(Boolean)
+        const filteredDeleted = deletedIds.filter(id => !idsToUnDelete.includes(id) && !emailsToUnDelete.includes(id))
+        localStorage.setItem('cw_deleted_staff_ids', JSON.stringify(filteredDeleted))
+      } catch {
+        // ignore
+      }
+    }
+
+    for (const rec of records) {
       const newRec = {
         id: rec.id || generateUUID(),
         created_at: rec.created_at || new Date().toISOString(),
@@ -360,10 +459,23 @@ class MockQueryBuilder {
         newRec.balance = Number(newRec.total_amount || 0) - Number(newRec.deposit || 0)
         newRec.status = newRec.deposit >= newRec.total_amount ? 'paid' : (newRec.deposit > 0 ? 'partial' : 'pending')
       }
-      return newRec
-    })
 
-    const updated = [...current, ...newRecords]
+      if (this.table === 'staff') {
+        const existingIdx = updated.findIndex(
+          item => (newRec.id && item.id === newRec.id) ||
+                  (newRec.email && item.email && item.email.toLowerCase().trim() === newRec.email.toLowerCase().trim())
+        )
+        if (existingIdx !== -1) {
+          updated[existingIdx] = { ...updated[existingIdx], ...newRec }
+          newRecords.push(updated[existingIdx])
+          continue
+        }
+      }
+
+      updated.push(newRec)
+      newRecords.push(newRec)
+    }
+
     storage.saveAll(updated)
 
     // If transaction inserted, sync order deposit and status
@@ -647,8 +759,18 @@ const mockAuth = {
       },
     }
 
+    // Remove from deleted IDs if re-registering
+    try {
+      const deletedIds = JSON.parse(localStorage.getItem('cw_deleted_staff_ids') || '[]')
+      const filtered = deletedIds.filter(id => id !== newUser.id && id !== cleanEmail)
+      localStorage.setItem('cw_deleted_staff_ids', JSON.stringify(filtered))
+    } catch {
+      // ignore
+    }
+
     customUsers.push(newUser)
     localStorage.setItem('cw_custom_users', JSON.stringify(customUsers))
+    notifyDataChanged('cw_custom_users')
 
     // Also register in mock staff table with pending status
     const staffStorage = mockTables.staff
@@ -666,6 +788,17 @@ const mockAuth = {
         status,
         created_at: new Date().toISOString(),
       })
+      staffStorage.saveAll(currentStaff)
+    } else {
+      currentStaff[existingStaffIdx] = {
+        ...currentStaff[existingStaffIdx],
+        name: fullName,
+        phone: phone || currentStaff[existingStaffIdx].phone,
+        role,
+        active: isSuper,
+        verified,
+        status,
+      }
       staffStorage.saveAll(currentStaff)
     }
 

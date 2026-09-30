@@ -5,7 +5,7 @@ import { PendingVerificationCard } from './PendingVerificationCard'
 import { Loader2 } from 'lucide-react'
 
 export function ProtectedRoute() {
-  const { isAuthenticated, isVerified, loading } = useAuth()
+  const { isAuthenticated, loading } = useAuth()
   const location = useLocation()
 
   if (loading) {
@@ -21,11 +21,6 @@ export function ProtectedRoute() {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />
-  }
-
-  // If user registered but is awaiting role assignment & verification by super admin
-  if (!isVerified) {
-    return <PendingVerificationCard />
   }
 
   return <Outlet />

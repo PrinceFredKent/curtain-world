@@ -11,22 +11,22 @@
     --brand-hover:   #6d28d9; /* purple-800 */
     --brand-light:   #ede9fe; /* purple-100 */
     --brand-fg:      #ffffff;
-    --brand-accent:  #a78bfa; /* purple-400 — replaces gold in dark */
+    --brand-accent:  #a78bfa;
 
     /* Surface */
-    --bg:            #f5f3ff; /* very light purple tint */
+    --bg:            #f7f6fd; /* very light purple tint */
     --surface:       #ffffff;
-    --surface-hover: #faf7ff;
+    --surface-hover: #f3f0fc;
     --card:          #ffffff;
 
     /* Border */
-    --border:        #e9e3ff;
-    --border-strong: #c4b5fd; /* purple-300 */
+    --border:        #e5dff7;
+    --border-strong: #c8bbf5;
 
     /* Text */
-    --fg:            #1e1b4b; /* indigo-950 */
-    --fg-muted:      #6b7280;
-    --fg-subtle:     #9ca3af;
+    --fg:            #17132e;
+    --fg-muted:      #665f80;
+    --fg-subtle:     #968eaf;
 
     /* Status */
     --success:       #16a34a;
@@ -41,27 +41,27 @@
   /* ─── Dark tokens ─── */
   @media (prefers-color-scheme: dark) {
     :root {
-      --brand:         #a78bfa; /* purple-400 — lighter for dark bg */
-      --brand-hover:   #c4b5fd; /* purple-300 */
-      --brand-light:   #2e1065; /* purple-950 */
+      --brand:         #8b5cf6; /* purple-500 */
+      --brand-hover:   #9d75f7;
+      --brand-light:   #231842;
       --brand-fg:      #ffffff;
       --brand-accent:  #c4b5fd;
 
-      --bg:            #0f0a1e; /* very dark purple */
-      --surface:       #1a1030;
-      --surface-hover: #231540;
-      --card:          #1a1030;
+      --bg:            #0c0a17; /* rich obsidian dark purple */
+      --surface:       #141024;
+      --surface-hover: #1e1836;
+      --card:          #141024;
 
-      --border:        #2d1b69;
-      --border-strong: #4c1d95;
+      --border:        #291f46;
+      --border-strong: #40326c;
 
       --fg:            #f5f3ff;
-      --fg-muted:      #a78bfa;
-      --fg-subtle:     #6b7280;
+      --fg-muted:      #9e93bf;
+      --fg-subtle:     #6b6287;
 
-      --success:       #4ade80;
-      --warning:       #fbbf24;
-      --danger:        #f87171;
+      --success:       #22c55e;
+      --warning:       #f59e0b;
+      --danger:        #ef4444;
     }
   }
 
@@ -76,7 +76,7 @@
   body {
     background-color: var(--bg);
     color: var(--fg);
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -99,80 +99,12 @@
   }
 }
 
-/* ─── Water Drop & Smooth Ripple Animations ─── */
-@keyframes water-ripple {
-  0% {
-    transform: scale(0);
-    opacity: 0.75;
-  }
-  50% {
-    opacity: 0.45;
-  }
-  100% {
-    transform: scale(4);
-    opacity: 0;
-  }
-}
-
-@keyframes water-drop-bounce {
-  0% {
-    transform: scale(1);
-  }
-  30% {
-    transform: scale(0.92, 1.08);
-  }
-  50% {
-    transform: scale(1.08, 0.94);
-  }
-  70% {
-    transform: scale(0.98, 1.02);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@keyframes water-plop {
-  0% {
-    transform: scale(0.85);
-    opacity: 0.6;
-  }
-  40% {
-    transform: scale(1.15);
-    opacity: 1;
-  }
-  70% {
-    transform: scale(0.95);
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes water-glow {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(167, 139, 250, 0);
-  }
-  50% {
-    box-shadow: 0 0 20px 4px rgba(167, 139, 250, 0.35);
-  }
-}
-
-/* Smooth spring classes */
+/* ─── Smooth spring classes ─── */
 .water-drop-press {
   transition: transform 0.4s var(--ease-spring), box-shadow 0.4s ease;
 }
 .water-drop-press:active {
   transform: scale(0.94);
-}
-
-.water-bounce {
-  animation: water-drop-bounce 0.6s var(--ease-spring);
-}
-
-.water-plop {
-  animation: water-plop 0.45s var(--ease-spring);
 }
 
 .liquid-transition {

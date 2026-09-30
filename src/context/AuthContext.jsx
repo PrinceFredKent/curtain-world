@@ -1,6 +1,6 @@
 // src/context/AuthContext.jsx
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { supabase, SUPER_ADMIN_EMAIL } from '../lib/supabase'
+import { supabase, SUPER_ADMIN_EMAIL, isLiveSupabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
@@ -27,8 +27,36 @@ export function AuthProvider({ children }) {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (session?.user) {
-        setUser({ ...session.user })
-        return session.user
+        let enhancedUser = { ...session.user }
+
+        // If online Supabase is active, query latest live staff row
+        if (isLiveSupabase) {
+          try {
+            const { data: staffRow } = await supabase
+              .from('staff')
+              .select('*')
+              .eq('id', session.user.id)
+              .maybeSingle()
+
+            if (staffRow) {
+              enhancedUser = {
+                ...enhancedUser,
+                user_metadata: {
+                  ...enhancedUser.user_metadata,
+                  role: staffRow.role,
+                  verified: Boolean(staffRow.verified),
+                  status: staffRow.status || (staffRow.verified ? 'active' : 'pending_verification'),
+                  full_name: staffRow.name || enhancedUser.user_metadata?.full_name,
+                },
+              }
+            }
+          } catch (e) {
+            console.warn('Could not fetch live staff row:', e)
+          }
+        }
+
+        setUser(enhancedUser)
+        return enhancedUser
       }
     } catch (e) {
       console.warn('Could not refresh user session:', e)
@@ -38,23 +66,62 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     // 1. Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-    }).catch(() => {
+    refreshUser().finally(() => {
       setLoading(false)
     })
 
     // 2. Listen to auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        await refreshUser()
+      } else {
+        setUser(null)
+      }
       setLoading(false)
     })
 
+    // 3. Listen to cross-tab storage updates
+    const handleStorageChange = (e) => {
+      if (e.key === 'cw_auth_session' || e.key === 'cw_custom_users' || e.key === 'cw_staff' || !e.key) {
+        refreshUser()
+      }
+    }
+    const handleCustomSync = () => {
+      refreshUser()
+    }
+    window.addEventListener('storage', handleStorageChange)
+    window.addEventListener('cw_storage_sync', handleCustomSync)
+
     return () => {
       subscription?.unsubscribe()
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('cw_storage_sync', handleCustomSync)
     }
-  }, [])
+  }, [refreshUser])
+
+  // Live Supabase Realtime subscription for current user's role verification
+  useEffect(() => {
+    let channel = null
+    if (isLiveSupabase && user?.id && supabase?.channel) {
+      const channelName = `user-verification-${user.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'staff', filter: `id=eq.${user.id}` },
+          () => {
+            refreshUser()
+          }
+        )
+        .subscribe()
+    }
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
+    }
+  }, [user?.id, refreshUser])
 
   const signIn = async (identifier, password) => {
     const isEmail = identifier.includes('@')
@@ -64,7 +131,7 @@ export function AuthProvider({ children }) {
 
     const { data, error } = await supabase.auth.signInWithPassword(credentials)
     if (error) throw error
-    setUser(data.user)
+    await refreshUser()
     return data
   }
 
@@ -105,10 +172,10 @@ export function AuthProvider({ children }) {
     })
     if (error) throw error
 
-    // Sync into staff table if live Supabase is connected
+    // Sync into live staff table with upsert
     try {
       if (data.user) {
-        await supabase.from('staff').insert({
+        await supabase.from('staff').upsert({
           id: data.user.id,
           name: fullName,
           email: cleanEmail,
@@ -123,7 +190,7 @@ export function AuthProvider({ children }) {
       console.warn('Could not auto-insert to staff table:', e)
     }
 
-    setUser(data.user)
+    await refreshUser()
     return data
   }
 

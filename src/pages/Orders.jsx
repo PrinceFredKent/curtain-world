@@ -412,9 +412,10 @@ function CreateOrderModal({ open, onClose }) {
                 {filteredStaff.length > 0 ? (
                   filteredStaff.map(st => {
                     const roleLabel = st.role === 'employee' ? 'Sales Rep' :
-                      st.role === 'workshop' ? 'Workshop / Tailor' :
-                      st.role === 'installer' ? 'Installer' :
-                      st.role === 'both' ? 'Sales & Workshop' : st.role
+                      st.role === 'cashier' ? 'Cashier' :
+                      st.role === 'admin' ? 'Store Admin' :
+                      st.role === 'super_admin' ? 'Super Admin' :
+                      st.role === 'both' ? 'Sales & Cashier' : (st.role || 'Staff')
                     return (
                       <button
                         key={st.id}

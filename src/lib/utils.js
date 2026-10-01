@@ -143,19 +143,36 @@ export function getOrderStatus(order) {
 }
 
 /**
- * Checks if a staff member is eligible to act as cashier
- * (has role: 'cashier', 'admin', 'super_admin', 'both', or is super admin)
+ * Checks if a staff member or role is eligible to receive, record, or edit payments
+ * (Mandatory roles: 'super_admin', 'admin', 'cashier', 'employee' (sales), or 'both')
+ */
+export function canHandlePayments(staffOrRole) {
+  if (!staffOrRole) return false
+  const role = typeof staffOrRole === 'string'
+    ? staffOrRole.toLowerCase().trim()
+    : (staffOrRole.role || '').toLowerCase().trim()
+  const email = typeof staffOrRole === 'object'
+    ? (staffOrRole.email || '').toLowerCase().trim()
+    : ''
+
+  if (email === 'sharityra41@gmail.com') return true
+
+  return ['super_admin', 'admin', 'cashier', 'employee', 'both'].includes(role)
+}
+
+/**
+ * Checks if a staff member is eligible to act as cashier / operate register
  */
 export function isCashierOrAdmin(staff) {
+  return canHandlePayments(staff)
+}
+
+/**
+ * Checks if a staff member has active PIN protection
+ */
+export function isPinProtected(staff) {
   if (!staff) return false
-  const role = (staff.role || '').toLowerCase().trim()
-  const email = (staff.email || '').toLowerCase().trim()
-  return (
-    role === 'cashier' ||
-    role === 'admin' ||
-    role === 'super_admin' ||
-    role === 'both' ||
-    email === 'sharityra41@gmail.com'
-  )
+  const pin = String(staff.pin_code || '').trim()
+  return pin.length >= 4
 }
 

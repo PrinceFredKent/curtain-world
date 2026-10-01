@@ -26,73 +26,93 @@ import {
   Search,
   Users,
   ShieldCheck,
-  Scissors,
-  Wrench,
+  ShieldAlert,
   ShoppingBag,
   RefreshCw,
+  Lock,
+  Eye,
+  EyeOff,
+  Sparkles,
 } from 'lucide-react'
 
 const staffSchema = z.object({
   name: z.string().min(2, 'Full name is required (at least 2 characters)'),
   phone: z.string().min(4, 'Phone number is required'),
-  role: z.enum(['employee', 'workshop', 'installer', 'cashier', 'admin', 'both']),
+  role: z.enum(['employee', 'cashier', 'admin', 'both', 'workshop', 'installer']),
+  pin_code: z.string().min(4, 'Security PIN must be at least 4 digits').max(6, 'PIN cannot exceed 6 digits').regex(/^\d+$/, 'PIN must contain numeric digits only'),
   email: z.string().email('Invalid email address').optional().or(z.literal('')),
   active: z.boolean().default(true),
 })
 
 const STAFF_ROLES = [
-  { value: 'cashier', label: 'Cashier (Receives Payments & Deposits)' },
+  { value: 'cashier', label: 'Cashier (Receives & Edits Payments)' },
   { value: 'employee', label: 'Sales Representative (Attends Clients & Orders)' },
-  { value: 'workshop', label: 'Workshop / Tailor (Sewing & Curtain Making)' },
-  { value: 'installer', label: 'Curtain Installer (Measurements & Fitting)' },
-  { value: 'both', label: 'Sales & Workshop (Multi-role)' },
-  { value: 'admin', label: 'Store Manager / Admin' },
+  { value: 'both', label: 'Sales Representative & Cashier (Multi-role)' },
+  { value: 'admin', label: 'Store Manager / Admin (Full Access)' },
 ]
 
 const roleBadgeColors = {
   employee: 'blue',
-  workshop: 'purple',
-  installer: 'indigo',
-  both: 'amber',
+  both: 'purple',
   cashier: 'green',
   admin: 'rose',
   super_admin: 'amber',
+  workshop: 'gray',
+  installer: 'gray',
 }
 
 const roleLabels = {
   cashier: 'Cashier',
   employee: 'Sales Representative',
-  workshop: 'Workshop / Tailor',
-  installer: 'Installer',
-  both: 'Sales & Workshop',
+  both: 'Sales & Cashier',
   admin: 'Store Manager',
   super_admin: 'Super Admin & Cashier',
+  workshop: 'Workshop / Tailor',
+  installer: 'Installer',
 }
 
 function StaffFormModal({ open, onClose, initialData, isEditing = false }) {
   const toast = useToast()
   const createStaff = useCreateStaff()
   const updateStaff = useUpdateStaff()
+  const [showPin, setShowPin] = useState(false)
 
-  const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm({
+  const { register, handleSubmit, setValue, formState: { errors, isSubmitting }, reset } = useForm({
     resolver: zodResolver(staffSchema),
-    defaultValues: initialData || {
+    defaultValues: initialData ? {
+      name: initialData.name || '',
+      phone: initialData.phone || '',
+      role: initialData.role && ['employee', 'cashier', 'admin', 'both'].includes(initialData.role) ? initialData.role : 'cashier',
+      pin_code: String(initialData.pin_code || '1234'),
+      email: initialData.email || '',
+      active: initialData.active ?? true,
+    } : {
       name: '',
       phone: '',
       role: 'cashier',
+      pin_code: '1234',
       email: '',
       active: true,
     },
   })
 
+  const handleGeneratePin = () => {
+    const randomPin = String(Math.floor(1000 + Math.random() * 9000))
+    setValue('pin_code', randomPin, { shouldValidate: true })
+    toast({ type: 'info', message: `Generated 4-digit PIN: ${randomPin}` })
+  }
+
   const onSubmit = async (data) => {
     try {
+      const cleanPin = (data.pin_code || '').trim() || '1234'
+
       if (isEditing && initialData?.id) {
         await updateStaff.mutateAsync({
           id: initialData.id,
           name: data.name,
           phone: data.phone,
           role: data.role,
+          pin_code: cleanPin,
           email: data.email || null,
           active: data.active,
           verified: true,
@@ -104,12 +124,16 @@ function StaffFormModal({ open, onClose, initialData, isEditing = false }) {
           name: data.name,
           phone: data.phone,
           role: data.role,
+          pin_code: cleanPin,
           email: data.email || null,
           active: true,
           verified: true,
           status: 'active',
         })
-        toast({ type: 'success', message: `${data.name} added to staff roster!` })
+        toast({
+          type: 'success',
+          message: `${data.name} added to staff roster with mandatory PIN protection!`,
+        })
       }
       reset()
       onClose()
@@ -127,7 +151,7 @@ function StaffFormModal({ open, onClose, initialData, isEditing = false }) {
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <p className="text-xs" style={{ color: 'var(--fg-muted)' }}>
-          Staff members added here can be assigned to customer orders, sales attributions, and commission reports.
+          Staff members added here can be assigned to customer orders, sales attributions, and commission reports. Each staff member requires a PIN to switch accounts and authorize registers.
         </p>
 
         <Input
@@ -149,6 +173,53 @@ function StaffFormModal({ open, onClose, initialData, isEditing = false }) {
             <option key={r.value} value={r.value}>{r.label}</option>
           ))}
         </Select>
+
+        {/* Security Access PIN Input */}
+        <div className="p-3.5 rounded-xl border border-purple-500/20 bg-purple-500/5 space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-semibold flex items-center gap-1.5" style={{ color: 'var(--fg)' }}>
+              <Lock className="h-4 w-4 text-purple-500" />
+              <span>Security Access PIN * (Mandatory 4–6 Digits)</span>
+            </label>
+            <button
+              type="button"
+              onClick={handleGeneratePin}
+              className="text-xs font-semibold hover:underline text-purple-600 dark:text-purple-400 flex items-center gap-1 cursor-pointer"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Generate PIN
+            </button>
+          </div>
+          <div className="relative">
+            <input
+              type={showPin ? 'text' : 'password'}
+              maxLength={6}
+              placeholder="e.g. 1234 (4–6 digits)"
+              className="w-full px-3 py-2 text-sm rounded-lg border font-mono tracking-widest transition-colors focus:outline-hidden focus:ring-2 focus:ring-purple-500"
+              style={{
+                background: 'var(--surface)',
+                borderColor: errors.pin_code ? '#ef4444' : 'var(--border)',
+                color: 'var(--fg)',
+              }}
+              {...register('pin_code')}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPin(!showPin)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 cursor-pointer"
+              tabIndex={-1}
+              title={showPin ? 'Hide PIN' : 'Show PIN'}
+            >
+              {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          {errors.pin_code && (
+            <p className="text-xs text-red-500 mt-1 font-medium">{errors.pin_code.message}</p>
+          )}
+          <p className="text-[11px] leading-relaxed" style={{ color: 'var(--fg-muted)' }}>
+            🔒 Mandatory for <strong>Admin</strong>, <strong>Sales Representatives</strong>, and <strong>Cashiers</strong> to authorize register access, collect customer payments, and edit transactions.
+          </p>
+        </div>
 
         <Input
           label="Email Address (Optional)"
@@ -204,13 +275,15 @@ export function Staff() {
       s.phone?.toLowerCase().includes(search.toLowerCase()) ||
       s.email?.toLowerCase().includes(search.toLowerCase())
 
-    const matchesRole = roleFilter === 'all' || s.role === roleFilter
+    const matchesRole = roleFilter === 'all' ||
+      s.role === roleFilter ||
+      (roleFilter === 'admin' && (s.role === 'admin' || s.role === 'super_admin'))
     return matchesSearch && matchesRole
   })
 
   const salesCount = allStaff.filter(s => s.role === 'employee' || s.role === 'both').length
-  const workshopCount = allStaff.filter(s => s.role === 'workshop' || s.role === 'both').length
-  const installerCount = allStaff.filter(s => s.role === 'installer').length
+  const cashierCount = allStaff.filter(s => s.role === 'cashier' || s.role === 'both' || s.role === 'super_admin').length
+  const adminCount = allStaff.filter(s => s.role === 'admin' || s.role === 'super_admin').length
 
   const handleDelete = async (staffMember) => {
     const confirmed = await confirm({
@@ -262,7 +335,7 @@ export function Staff() {
             </span>
           </div>
           <p className="text-sm mt-1" style={{ color: 'var(--fg-muted)' }}>
-            Manage sales representatives, tailors, and installers assigned to customer orders
+            Manage sales representatives, cashiers, and administrators assigned to customer orders and registers
           </p>
         </div>
 
@@ -311,24 +384,24 @@ export function Staff() {
 
         <Card className="p-4 shadow-xs" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold shrink-0">
-              <Scissors className="h-5 w-5" />
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-green-500/10 text-green-600 dark:text-green-400 font-bold shrink-0">
+              <ShieldCheck className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs font-medium" style={{ color: 'var(--fg-muted)' }}>Workshop & Tailors</p>
-              <p className="text-xl font-bold mt-0.5" style={{ color: 'var(--fg)' }}>{workshopCount}</p>
+              <p className="text-xs font-medium" style={{ color: 'var(--fg-muted)' }}>Cashiers</p>
+              <p className="text-xl font-bold mt-0.5" style={{ color: 'var(--fg)' }}>{cashierCount}</p>
             </div>
           </div>
         </Card>
 
         <Card className="p-4 shadow-xs" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold shrink-0">
-              <Wrench className="h-5 w-5" />
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold shrink-0">
+              <Users className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs font-medium" style={{ color: 'var(--fg-muted)' }}>Installers</p>
-              <p className="text-xl font-bold mt-0.5" style={{ color: 'var(--fg)' }}>{installerCount}</p>
+              <p className="text-xs font-medium" style={{ color: 'var(--fg-muted)' }}>Store Admins</p>
+              <p className="text-xl font-bold mt-0.5" style={{ color: 'var(--fg)' }}>{adminCount}</p>
             </div>
           </div>
         </Card>
@@ -370,10 +443,8 @@ export function Staff() {
             >
               <option value="all">All Roles</option>
               <option value="employee">Sales Representatives</option>
-              <option value="workshop">Workshop / Tailors</option>
-              <option value="installer">Installers</option>
-              <option value="both">Sales & Workshop</option>
               <option value="cashier">Cashiers</option>
+              <option value="both">Sales & Cashiers</option>
               <option value="admin">Admins</option>
             </select>
           </div>
@@ -394,7 +465,7 @@ export function Staff() {
               <p className="text-xs max-w-sm mx-auto" style={{ color: 'var(--fg-muted)' }}>
                 {search
                   ? 'Try changing your search query or role filter.'
-                  : 'Add your sales reps, tailors, and installers so you can attribute sales and orders to them.'}
+                  : 'Add your sales reps and cashiers so you can attribute sales and orders to them.'}
               </p>
               {!search && (
                 <Button onClick={() => setShowAddModal(true)} className="mt-2">
@@ -416,6 +487,7 @@ export function Staff() {
                   >
                     <th className="py-3.5 px-4">Staff Member</th>
                     <th className="py-3.5 px-4">Role / Department</th>
+                    <th className="py-3.5 px-4">Security PIN</th>
                     <th className="py-3.5 px-4">Phone Number</th>
                     <th className="py-3.5 px-4">Email</th>
                     <th className="py-3.5 px-4">Status</th>
@@ -459,6 +531,40 @@ export function Staff() {
                           <Badge variant={badgeVariant} className="text-[11px] font-medium">
                             {roleName}
                           </Badge>
+                        </td>
+
+                        <td className="py-3.5 px-4">
+                          {member.pin_code && String(member.pin_code).trim().length >= 4 ? (
+                            <span
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border shadow-xs"
+                              style={{
+                                backgroundColor: 'rgba(124, 58, 237, 0.12)',
+                                borderColor: 'rgba(124, 58, 237, 0.28)',
+                                color: 'var(--brand)',
+                              }}
+                              title="Account is protected with Security PIN"
+                            >
+                              <Lock className="h-3.5 w-3.5 shrink-0" />
+                              <span>PIN Protected</span>
+                            </span>
+                          ) : ['workshop', 'installer'].includes(member.role) ? (
+                            <span className="text-[11px] text-[var(--fg-muted)] italic">
+                              Not Required
+                            </span>
+                          ) : (
+                            <span
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border shadow-xs"
+                              style={{
+                                backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                                borderColor: 'rgba(245, 158, 11, 0.28)',
+                                color: '#d97706',
+                              }}
+                              title="No PIN configured. Mandatory for payment accounts."
+                            >
+                              <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+                              <span>No PIN</span>
+                            </span>
+                          )}
                         </td>
 
                         <td className="py-3.5 px-4">

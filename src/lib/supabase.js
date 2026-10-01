@@ -98,7 +98,17 @@ class LocalStorageTable {
           }
         }
 
-        if (modified) {
+        // Ensure every staff member has a pin_code
+        let pinUpdated = false
+        data = data.map(s => {
+          if (!s.pin_code) {
+            pinUpdated = true
+            return { ...s, pin_code: '1234' }
+          }
+          return s
+        })
+
+        if (modified || pinUpdated) {
           localStorage.setItem(this.key, JSON.stringify(data))
         }
       }

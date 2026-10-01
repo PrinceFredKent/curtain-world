@@ -19,6 +19,7 @@ create table if not exists public.staff (
 alter table public.staff add column if not exists email text;
 alter table public.staff add column if not exists phone text;
 alter table public.staff add column if not exists role text;
+alter table public.staff add column if not exists pin_code text default '1234';
 alter table public.staff add column if not exists active boolean default true;
 alter table public.staff add column if not exists verified boolean default false;
 alter table public.staff add column if not exists status text default 'pending_verification';

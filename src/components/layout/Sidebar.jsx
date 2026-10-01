@@ -112,15 +112,13 @@ export function Sidebar() {
         >
           {/* Logo & Brand Name */}
           <div className={cn('flex items-center min-w-0', collapsed ? 'justify-center' : 'gap-3')}>
-            <div
-              className="inline-flex items-center justify-center h-10 w-10 rounded-2xl shrink-0 shadow-xs cursor-pointer water-drop-press hover:rotate-2 transition-transform duration-300"
-              style={{ background: 'var(--brand-light)' }}
+            <img
+              src="/logo.png"
+              alt="Curtain World Logo"
+              referrerPolicy="no-referrer"
+              className="h-10 w-10 rounded-xl object-cover shrink-0 shadow-md cursor-pointer water-drop-press hover:scale-105 transition-transform duration-300 border border-purple-500/30"
               title="Curtain World"
-            >
-              <span className="text-xs font-black tracking-wider uppercase" style={{ color: 'var(--brand)' }}>
-                CW
-              </span>
-            </div>
+            />
 
             {/* Expanded Brand Name with liquid fade */}
             <div

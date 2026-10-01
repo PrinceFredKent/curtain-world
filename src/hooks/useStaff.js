@@ -3,6 +3,47 @@ import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase, isLiveSupabase } from '../lib/supabase'
 
+export function getStoredStaffPins() {
+  try {
+    return JSON.parse(localStorage.getItem('cw_staff_pins') || '{}')
+  } catch {
+    return {}
+  }
+}
+
+export function saveStaffPin(staffId, email, phone, pinCode) {
+  if (!pinCode) return
+  try {
+    const pins = getStoredStaffPins()
+    const pinStr = String(pinCode).trim()
+    if (staffId) pins[staffId] = pinStr
+    if (email) pins[email.toLowerCase().trim()] = pinStr
+    if (phone) pins[phone.trim()] = pinStr
+    localStorage.setItem('cw_staff_pins', JSON.stringify(pins))
+    window.dispatchEvent(new CustomEvent('cw_storage_sync', { detail: { key: 'cw_staff_pins' } }))
+  } catch (err) {
+    console.error('Failed to persist staff pin:', err)
+  }
+}
+
+function enrichStaffWithPin(staffList) {
+  const pins = getStoredStaffPins()
+  return (staffList || []).map(s => {
+    const isPaymentRole = ['cashier', 'employee', 'admin', 'super_admin', 'both'].includes(s.role)
+    const storedPin = s.pin_code ||
+      (s.id ? pins[s.id] : null) ||
+      (s.email ? pins[s.email.toLowerCase().trim()] : null) ||
+      (s.phone ? pins[s.phone.trim()] : null)
+
+    const finalPin = storedPin || (isPaymentRole ? '1234' : null)
+
+    return {
+      ...s,
+      pin_code: finalPin ? String(finalPin) : null,
+    }
+  })
+}
+
 export function useStaff(roleFilter = null) {
   const queryClient = useQueryClient()
 
@@ -52,8 +93,9 @@ export function useStaff(roleFilter = null) {
 
       const { data, error } = await query
       if (error) throw error
+      const enriched = enrichStaffWithPin(data || [])
       // Only return active, verified staff who have an assigned role
-      return (data || []).filter(s => (s.verified !== false) && s.role && s.role !== 'pending')
+      return enriched.filter(s => (s.verified !== false) && s.role && s.role !== 'pending')
     },
   })
 }
@@ -100,7 +142,7 @@ export function useAllStaff() {
         .select('*')
         .order('name')
       if (error) throw error
-      return data
+      return enrichStaffWithPin(data || [])
     },
   })
 }
@@ -109,17 +151,54 @@ export function useCreateStaff() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (staff) => {
-      const { data, error } = await supabase
-        .from('staff')
-        .insert({
-          ...staff,
-          verified: true,
-          active: true,
-          status: 'active',
-        })
-        .select()
-        .single()
-      if (error) throw error
+      const pinCode = staff.pin_code || '1234'
+      const payloadWithPin = {
+        ...staff,
+        pin_code: pinCode,
+        verified: true,
+        active: true,
+        status: 'active',
+      }
+
+      let data = null
+      let error = null
+
+      try {
+        const res = await supabase
+          .from('staff')
+          .insert(payloadWithPin)
+          .select()
+          .single()
+        data = res.data
+        error = res.error
+      } catch (e) {
+        error = e
+      }
+
+      // If remote Supabase schema does not have 'pin_code' column in Postgres cache, retry safely without it
+      if (error && (
+        error.message?.includes('pin_code') ||
+        error.message?.includes('schema cache') ||
+        error.code === 'PGRST204' ||
+        error.code === '42703'
+      )) {
+        const { pin_code: _discarded, ...payloadWithoutPin } = payloadWithPin
+        const retryRes = await supabase
+          .from('staff')
+          .insert(payloadWithoutPin)
+          .select()
+          .single()
+        if (retryRes.error) throw retryRes.error
+        data = retryRes.data
+      } else if (error) {
+        throw error
+      }
+
+      if (data) {
+        saveStaffPin(data.id, data.email || staff.email, data.phone || staff.phone, pinCode)
+        data.pin_code = pinCode
+      }
+
       return data
     },
     onSuccess: () => {
@@ -158,13 +237,51 @@ export function useUpdateStaff() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, ...updates }) => {
-      const { data, error } = await supabase
-        .from('staff')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single()
-      if (error) throw error
+      const pinCode = updates.pin_code
+      if (pinCode) {
+        saveStaffPin(id, updates.email, updates.phone, pinCode)
+      }
+
+      let data = null
+      let error = null
+
+      try {
+        const res = await supabase
+          .from('staff')
+          .update(updates)
+          .eq('id', id)
+          .select()
+          .single()
+        data = res.data
+        error = res.error
+      } catch (e) {
+        error = e
+      }
+
+      // If remote Supabase schema does not have 'pin_code' column in Postgres cache, retry safely without it
+      if (error && (
+        error.message?.includes('pin_code') ||
+        error.message?.includes('schema cache') ||
+        error.code === 'PGRST204' ||
+        error.code === '42703'
+      )) {
+        const { pin_code: _discarded, ...safeUpdates } = updates
+        const retryRes = await supabase
+          .from('staff')
+          .update(safeUpdates)
+          .eq('id', id)
+          .select()
+          .single()
+        if (retryRes.error) throw retryRes.error
+        data = retryRes.data
+      } else if (error) {
+        throw error
+      }
+
+      if (data && pinCode) {
+        data.pin_code = pinCode
+      }
+
       return data
     },
     onSuccess: () => {

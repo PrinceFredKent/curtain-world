@@ -42,6 +42,14 @@ export function ForgotPassword() {
     <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--bg)', color: 'var(--fg)' }}>
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
+          <div className="flex justify-center mb-2">
+            <img
+              src="/logo.png"
+              alt="Curtain World Logo"
+              referrerPolicy="no-referrer"
+              className="h-20 w-20 rounded-2xl object-cover shadow-xl border-2 border-purple-500/40"
+            />
+          </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight" style={{ color: 'var(--fg)' }}>
             Reset Your Password
           </h1>

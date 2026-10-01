@@ -15,8 +15,8 @@ import { useConfirm } from '../components/ui/ConfirmDialog'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { ArrowLeft, Plus, Download, Trash2, DollarSign, User, ShieldCheck } from 'lucide-react'
-import { formatCurrency, formatDateTime, formatDate, getPaymentMethodLabel, getOrderStatus, isCashierOrAdmin } from '../lib/utils'
+import { ArrowLeft, Plus, Download, Trash2, DollarSign, User, ShieldCheck, Lock } from 'lucide-react'
+import { formatCurrency, formatDateTime, formatDate, getPaymentMethodLabel, getOrderStatus, isCashierOrAdmin, canHandlePayments } from '../lib/utils'
 import { generateReceiptPDF, downloadPDF, downloadOrderPDF, downloadOrderPNG, printOrderReceipt } from '../lib/pdf'
 import { WhatsAppShareModal } from '../components/orders/WhatsAppShareModal'
 import { useAuth } from '../context/AuthContext'
@@ -188,11 +188,14 @@ function TrHover({ children, ...props }) {
 export function OrderDetail() {
   const { id } = useParams()
   const { data: order, isLoading } = useOrder(id)
+  const { role } = useAuth()
   const deleteTxn = useDeleteTransaction()
   const toast = useToast()
   const confirm = useConfirm()
   const [showPayment, setShowPayment] = useState(false)
   const [showWhatsApp, setShowWhatsApp] = useState(false)
+
+  const canManagePayment = canHandlePayments(role)
 
   if (isLoading) {
     return (
@@ -412,20 +415,28 @@ export function OrderDetail() {
 
       {/* Transactions */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex items-center justify-between">
           <CardTitle>Payment History</CardTitle>
-          <Button size="sm" onClick={() => setShowPayment(true)}>
-            <Plus className="h-4 w-4" /> Add Payment
-          </Button>
+          {canManagePayment ? (
+            <Button size="sm" onClick={() => setShowPayment(true)}>
+              <Plus className="h-4 w-4" /> Add Payment
+            </Button>
+          ) : (
+            <span className="text-xs italic text-[var(--fg-muted)] flex items-center gap-1">
+              <Lock className="h-3 w-3" /> Payments restricted to Admin, Sales & Cashiers
+            </span>
+          )}
         </CardHeader>
         {(order.transactions || []).length === 0 ? (
           <CardContent>
             <div className="py-8 text-center">
               <DollarSign className="h-10 w-10 mx-auto mb-2" style={{ color: 'var(--border-strong)' }} />
               <p className="text-sm" style={{ color: 'var(--fg-subtle)' }}>No payments recorded yet</p>
-              <Button size="sm" variant="secondary" className="mt-3" onClick={() => setShowPayment(true)}>
-                Record first payment
-              </Button>
+              {canManagePayment && (
+                <Button size="sm" variant="secondary" className="mt-3" onClick={() => setShowPayment(true)}>
+                  Record first payment
+                </Button>
+              )}
             </div>
           </CardContent>
         ) : (
@@ -433,7 +444,7 @@ export function OrderDetail() {
             <table className="w-full">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {['Date', 'Type', 'Amount', 'Method', 'Cashier', 'Notes', ''].map((h, i) => (
+                  {['Date', 'Type', 'Amount', 'Method', 'Cashier', 'Notes', ''].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase" style={{ color: 'var(--fg-muted)' }}>{h}</th>
                   ))}
                 </tr>
@@ -463,15 +474,15 @@ export function OrderDetail() {
                         >
                           <Download className="h-4 w-4" />
                         </button>
-                        <button
-                          onClick={() => handleDeleteTxn(txn)}
-                          className="p-1.5 rounded-lg transition-colors text-red-500"
-                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {canManagePayment && (
+                          <button
+                            onClick={() => handleDeleteTxn(txn)}
+                            className="p-1.5 rounded-lg transition-colors text-red-500 hover:bg-red-500/10 cursor-pointer"
+                            title="Delete payment record"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </TrHover>

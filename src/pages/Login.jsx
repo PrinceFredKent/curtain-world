@@ -51,6 +51,14 @@ export function Login() {
       <div className="w-full max-w-md space-y-6">
         {/* Brand header */}
         <div className="text-center space-y-2">
+          <div className="flex justify-center mb-2">
+            <img
+              src="/logo.png"
+              alt="Curtain World Logo"
+              referrerPolicy="no-referrer"
+              className="h-20 w-20 rounded-2xl object-cover shadow-xl border-2 border-purple-500/40"
+            />
+          </div>
           <div
             className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full mb-1 border shadow-xs"
             style={{ background: 'var(--brand-light)', borderColor: 'var(--border)' }}

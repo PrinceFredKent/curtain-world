@@ -66,14 +66,12 @@ export function MobileTopBar() {
           </button>
 
           <div className="flex items-center gap-2">
-            <div
-              className="inline-flex items-center justify-center h-8 w-8 rounded-xl shadow-xs"
-              style={{ background: 'var(--brand-light)' }}
-            >
-              <span className="text-xs font-black tracking-wider uppercase" style={{ color: 'var(--brand)' }}>
-                CW
-              </span>
-            </div>
+            <img
+              src="/logo.png"
+              alt="Curtain World Logo"
+              referrerPolicy="no-referrer"
+              className="h-8 w-8 rounded-lg object-cover shadow-xs border border-purple-500/30"
+            />
             <div>
               <h1 className="text-sm font-bold tracking-tight leading-tight" style={{ color: 'var(--fg)' }}>
                 Curtain World

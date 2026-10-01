@@ -1,4 +1,5 @@
 // src/components/layout/Sidebar.jsx
+import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -13,6 +14,7 @@ import {
   Crown,
   ChevronLeft,
   ChevronRight,
+  Sparkles,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useSidebar } from '../../context/SidebarContext'
@@ -21,6 +23,7 @@ import { Badge } from '../ui/Badge'
 import { WaterRipple } from '../ui/WaterRipple'
 import { useConfirm } from '../ui/ConfirmDialog'
 import { cn } from '../../lib/utils'
+import { CashierSwitchModal } from '../common/CashierSwitchModal'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -34,9 +37,12 @@ const navItems = [
 
 export function Sidebar() {
   const { collapsed, toggleCollapsed, mobileOpen, closeMobile } = useSidebar()
-  const { user, fullName, role, isSuperAdmin, signOut } = useAuth()
+  const { user, fullName, role, isSuperAdmin, signOut, activeCashierId } = useAuth()
   const { data: staffList } = useAllStaff()
   const confirm = useConfirm()
+  const [showCashierModal, setShowCashierModal] = useState(false)
+
+  const activeCashierStaff = (staffList || []).find(s => s.id === activeCashierId)
 
   const handleSignOut = async () => {
     const confirmed = await confirm({
@@ -269,6 +275,37 @@ export function Sidebar() {
             )}
             style={{ borderColor: 'var(--border)' }}
           >
+            {/* Cashier Shift Switcher Card */}
+            {!collapsed && (
+              <div
+                className="mb-2 p-2 rounded-xl border flex items-center justify-between transition-colors text-xs"
+                style={{
+                  background: 'var(--surface)',
+                  borderColor: 'var(--border)',
+                }}
+              >
+                <div className="min-w-0 flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--fg-muted)' }}>
+                      Register Cashier
+                    </p>
+                    <p className="font-semibold truncate text-[11px]" style={{ color: 'var(--fg)' }}>
+                      {activeCashierStaff?.name || fullName || 'Active Cashier'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCashierModal(true)}
+                  className="px-2 py-1 rounded-lg text-[10px] font-bold border transition-all hover:scale-105 active:scale-95 cursor-pointer bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-300 border-purple-500/30"
+                  title="Switch cashier on duty"
+                >
+                  Switch
+                </button>
+              </div>
+            )}
+
             <div
               className={cn(
                 'rounded-xl border transition-all duration-300 flex items-center',
@@ -335,6 +372,11 @@ export function Sidebar() {
           </div>
         )}
       </aside>
+
+      <CashierSwitchModal
+        open={showCashierModal}
+        onClose={() => setShowCashierModal(false)}
+      />
     </>
   )
 }

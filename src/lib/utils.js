@@ -141,3 +141,21 @@ export function getOrderStatus(order) {
     },
   }
 }
+
+/**
+ * Checks if a staff member is eligible to act as cashier
+ * (has role: 'cashier', 'admin', 'super_admin', 'both', or is super admin)
+ */
+export function isCashierOrAdmin(staff) {
+  if (!staff) return false
+  const role = (staff.role || '').toLowerCase().trim()
+  const email = (staff.email || '').toLowerCase().trim()
+  return (
+    role === 'cashier' ||
+    role === 'admin' ||
+    role === 'super_admin' ||
+    role === 'both' ||
+    email === 'sharityra41@gmail.com'
+  )
+}
+

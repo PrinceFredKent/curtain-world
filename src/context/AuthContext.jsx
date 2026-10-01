@@ -22,6 +22,26 @@ export function isUserVerified(user) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [activeCashierId, setActiveCashierIdState] = useState(() => {
+    try {
+      return localStorage.getItem('cw_active_cashier_id') || ''
+    } catch {
+      return ''
+    }
+  })
+
+  const setActiveCashierId = useCallback((id) => {
+    setActiveCashierIdState(id || '')
+    try {
+      if (id) {
+        localStorage.setItem('cw_active_cashier_id', id)
+      } else {
+        localStorage.removeItem('cw_active_cashier_id')
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
 
   const refreshUser = useCallback(async () => {
     try {
@@ -245,6 +265,8 @@ export function AuthProvider({ children }) {
         isSuperAdmin,
         isVerified,
         loading,
+        activeCashierId: activeCashierId || user?.id || '',
+        setActiveCashierId,
         signIn,
         signUp,
         signOut,

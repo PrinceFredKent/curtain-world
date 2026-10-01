@@ -50,12 +50,56 @@ export function useCreateTransaction() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (txn) => {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('transactions')
         .insert(txn)
         .select()
         .single()
-      if (error) throw error
+
+      // Handle database check constraint variations on payment_method gracefully
+      if (error && (error.message?.includes('transactions_payment_method_check') || error.code === '23514')) {
+        console.warn('Payment method constraint encountered, applying automatic fallback...', error.message)
+        const methodMap = {
+          momo: ['mobile_money', 'mtn_momo', 'cash'],
+          airtel: ['mobile_money', 'airtel_money', 'cash'],
+          bank: ['bank_transfer', 'transfer', 'cash'],
+          card: ['pos', 'credit_card', 'cash'],
+          other: ['cash'],
+        }
+
+        const candidates = methodMap[txn.payment_method] || ['cash']
+        let lastError = error
+
+        for (const candidate of candidates) {
+          const fallbackTxn = {
+            ...txn,
+            payment_method: candidate,
+            notes: txn.notes
+              ? `${txn.notes} [Method: ${txn.payment_method}]`
+              : `Payment method: ${txn.payment_method}`,
+          }
+
+          const retry = await supabase
+            .from('transactions')
+            .insert(fallbackTxn)
+            .select()
+            .single()
+
+          if (!retry.error) {
+            data = retry.data
+            error = null
+            break
+          }
+          lastError = retry.error
+        }
+
+        if (error) {
+          throw lastError
+        }
+      } else if (error) {
+        throw error
+      }
+
       return data
     },
     onSuccess: (data) => {

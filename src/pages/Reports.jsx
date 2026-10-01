@@ -227,6 +227,7 @@ export function Reports() {
                       <XAxis type="number" tickFormatter={v => `${(v / 1_000_000).toFixed(1)}M`} />
                       <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11 }} />
                       <Tooltip
+                        cursor={false}
                         formatter={v => formatCurrency(v)}
                         contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg)' }}
                       />

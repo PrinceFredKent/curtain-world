@@ -16,10 +16,11 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ArrowLeft, Plus, Download, Trash2, DollarSign, User, ShieldCheck } from 'lucide-react'
-import { formatCurrency, formatDateTime, formatDate, getPaymentMethodLabel, getOrderStatus } from '../lib/utils'
+import { formatCurrency, formatDateTime, formatDate, getPaymentMethodLabel, getOrderStatus, isCashierOrAdmin } from '../lib/utils'
 import { generateReceiptPDF, downloadPDF, downloadOrderPDF, downloadOrderPNG, printOrderReceipt } from '../lib/pdf'
+import { WhatsAppShareModal } from '../components/orders/WhatsAppShareModal'
 import { useAuth } from '../context/AuthContext'
-import { Printer, FileText, Image as ImageIcon } from 'lucide-react'
+import { Printer, FileText, Image as ImageIcon, MessageSquare } from 'lucide-react'
 
 const paymentSchema = z.object({
   amount: z.coerce.number().positive('Amount must be positive'),
@@ -32,20 +33,22 @@ const paymentSchema = z.object({
 
 function AddPaymentModal({ open, onClose, order, defaultType = 'payment' }) {
   const toast = useToast()
-  const { user, fullName } = useAuth()
+  const { user, fullName, activeCashierId } = useAuth()
   const { data: staffList } = useAllStaff()
   const createTxn = useCreateTransaction()
 
   const activeStaff = (staffList || []).filter(s => s.active !== false)
-  const adminStaff = activeStaff.find(s => s.id === user?.id || s.email === user?.email || s.role === 'super_admin' || s.role === 'admin')
+  const cashierStaff = activeStaff.filter(isCashierOrAdmin)
+  const eligibleCashiers = cashierStaff.length > 0 ? cashierStaff : activeStaff
+  const adminStaff = eligibleCashiers.find(s => s.id === (activeCashierId || user?.id) || s.email === user?.email || s.role === 'super_admin' || s.role === 'admin')
 
-  const { register, handleSubmit, watch, formState: { errors, isSubmitting }, reset } = useForm({
+  const { register, handleSubmit, watch, formState: { errors }, reset } = useForm({
     resolver: zodResolver(paymentSchema),
     values: {
       type: defaultType,
       payment_method: 'cash',
       amount: order?.balance ?? '',
-      cashier_id: adminStaff?.id || user?.id || order?.cashier_id || '',
+      cashier_id: activeCashierId || adminStaff?.id || user?.id || order?.cashier_id || '',
       employee_id: order?.employee_id || '',
       notes: '',
     },
@@ -60,7 +63,7 @@ function AddPaymentModal({ open, onClose, order, defaultType = 'payment' }) {
         order_id: order.id,
         customer_id: order.customer_id,
         employee_id: data.employee_id || order.employee_id || null,
-        cashier_id: data.cashier_id || adminStaff?.id || user?.id || order.cashier_id || null,
+        cashier_id: data.cashier_id || activeCashierId || adminStaff?.id || user?.id || order.cashier_id || null,
         type: data.type,
         amount: data.amount,
         payment_method: data.payment_method,
@@ -128,12 +131,22 @@ function AddPaymentModal({ open, onClose, order, defaultType = 'payment' }) {
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </Select>
-          <div>
-            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--fg)' }}>Cashier</label>
-            <div className="px-3 py-2 rounded-lg border text-sm font-medium bg-zinc-50 dark:bg-zinc-900/50" style={{ borderColor: 'var(--border)', color: 'var(--fg)' }}>
-              {fullName || 'Admin & Cashier'}
-            </div>
-          </div>
+
+          <Select label="Cashier (Received By)" {...register('cashier_id')}>
+            {eligibleCashiers.map(s => {
+              const isCurrent = s.id === (activeCashierId || user?.id)
+              return (
+                <option key={s.id} value={s.id}>
+                  {s.name} {isCurrent ? '(Active Shift)' : ''}
+                </option>
+              )
+            })}
+            {!eligibleCashiers.some(s => s.id === (activeCashierId || user?.id)) && (
+              <option value={activeCashierId || user?.id || ''}>
+                {fullName || 'Admin & Cashier'} (Active Shift)
+              </option>
+            )}
+          </Select>
         </div>
 
         <div>
@@ -179,6 +192,7 @@ export function OrderDetail() {
   const toast = useToast()
   const confirm = useConfirm()
   const [showPayment, setShowPayment] = useState(false)
+  const [showWhatsApp, setShowWhatsApp] = useState(false)
 
   if (isLoading) {
     return (
@@ -294,6 +308,14 @@ export function OrderDetail() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => setShowWhatsApp(true)}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+            title="Send Receipt to Customer's WhatsApp"
+          >
+            <MessageSquare className="h-4 w-4" /> WhatsApp
+          </Button>
           <Button variant="secondary" size="sm" onClick={handlePrintOrder} title="Print Voucher">
             <Printer className="h-4 w-4" /> Print Voucher
           </Button>
@@ -467,6 +489,12 @@ export function OrderDetail() {
           if (txn) handleDownloadReceipt(txn)
         }}
         order={order}
+      />
+
+      <WhatsAppShareModal
+        open={showWhatsApp}
+        onClose={() => setShowWhatsApp(false)}
+        orderData={{ order }}
       />
     </div>
   )

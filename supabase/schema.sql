@@ -106,6 +106,15 @@ create table if not exists public.transactions (
   created_at      timestamptz default now()
 );
 
+-- Drop old restrictive check constraint on payment_method
+alter table public.transactions drop constraint if exists transactions_payment_method_check;
+alter table public.transactions add constraint transactions_payment_method_check check (
+  payment_method is null or payment_method in (
+    'cash', 'momo', 'airtel', 'bank', 'card', 'other',
+    'mobile_money', 'mtn_momo', 'airtel_money', 'bank_transfer', 'pos', 'transfer'
+  )
+);
+
 -- ─────────────────────────────────────────────
 -- 7. AUTOMATIC AUTH -> STAFF TRIGGER (Handles every online signup)
 -- ─────────────────────────────────────────────

@@ -29,9 +29,11 @@ import {
   Printer,
   FileText,
   Image as ImageIcon,
+  MessageSquare,
 } from 'lucide-react'
-import { formatCurrency, formatDate, getOrderStatus } from '../lib/utils'
+import { formatCurrency, formatDate, getOrderStatus, isCashierOrAdmin } from '../lib/utils'
 import { downloadOrderPDF, downloadOrderPNG, printOrderReceipt } from '../lib/pdf'
+import { WhatsAppShareModal } from '../components/orders/WhatsAppShareModal'
 import { useAuth } from '../context/AuthContext'
 
 const itemSchema = z.object({
@@ -56,7 +58,7 @@ const orderSchema = z.object({
 function CreateOrderModal({ open, onClose }) {
   const toast = useToast()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, activeCashierId } = useAuth()
   const { data: customers } = useCustomers('')
   const { data: staffList } = useAllStaff()
   const createCustomer = useCreateCustomer()
@@ -66,7 +68,9 @@ function CreateOrderModal({ open, onClose }) {
 
   const allCustomers = customers || []
   const allStaff = (staffList || []).filter(s => s.active !== false)
-  const adminStaff = allStaff.find(s => s.id === user?.id || s.email === user?.email || s.role === 'super_admin' || s.role === 'admin')
+  const cashierStaff = allStaff.filter(isCashierOrAdmin)
+  const eligibleCashiers = cashierStaff.length > 0 ? cashierStaff : allStaff
+  const adminStaff = eligibleCashiers.find(s => s.id === (activeCashierId || user?.id) || s.email === user?.email || s.role === 'super_admin' || s.role === 'admin')
 
   // Autocomplete dropdown states
   const [customerQuery, setCustomerQuery] = useState('')
@@ -90,7 +94,7 @@ function CreateOrderModal({ open, onClose }) {
       customer_id: selectedCustomerId || '',
       employee_name: staffQuery,
       employee_id: selectedStaffId || '',
-      cashier_id: adminStaff?.id || user?.id || '',
+      cashier_id: activeCashierId || adminStaff?.id || user?.id || '',
       initial_deposit: 0,
       payment_method: 'cash',
       notes: '',
@@ -568,6 +572,24 @@ function CreateOrderModal({ open, onClose }) {
             </Select>
           </div>
 
+          <div className="pt-1">
+            <Select label="Cashier Shift (Received By)" {...register('cashier_id')}>
+              {eligibleCashiers.map(s => {
+                const isCurrent = s.id === (activeCashierId || user?.id)
+                return (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.role || 'Staff'}) {isCurrent ? '— Active Shift' : ''}
+                  </option>
+                )
+              })}
+              {!eligibleCashiers.some(s => s.id === (activeCashierId || user?.id)) && (
+                <option value={activeCashierId || user?.id || ''}>
+                  {user?.user_metadata?.full_name || 'Admin & Cashier'} (Active Shift)
+                </option>
+              )}
+            </Select>
+          </div>
+
           {/* Live Dynamic Balance Breakdown Card */}
           <div
             className="p-3.5 rounded-lg border grid grid-cols-3 gap-2 text-center"
@@ -637,6 +659,7 @@ export function Orders() {
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
   const [showCreate, setShowCreate] = useState(false)
+  const [whatsAppOrder, setWhatsAppOrder] = useState(null)
   const toast = useToast()
 
   const { data, isLoading } = useOrders({ status, page, perPage: 20 })
@@ -806,6 +829,17 @@ export function Orders() {
 
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* WhatsApp Share Button */}
+                          <button
+                            type="button"
+                            onClick={() => setWhatsAppOrder(order)}
+                            className="p-1.5 rounded-lg border hover:bg-emerald-500/10 transition-colors"
+                            style={{ borderColor: 'var(--border)', color: '#16a34a' }}
+                            title="Send Receipt to Customer's WhatsApp"
+                          >
+                            <MessageSquare className="h-3.5 w-3.5" />
+                          </button>
+
                           {/* Print Icon Button */}
                           <button
                             type="button"
@@ -887,6 +921,14 @@ export function Orders() {
       </Card>
 
       <CreateOrderModal open={showCreate} onClose={() => setShowCreate(false)} />
+
+      {whatsAppOrder && (
+        <WhatsAppShareModal
+          open={!!whatsAppOrder}
+          onClose={() => setWhatsAppOrder(null)}
+          orderData={{ order: whatsAppOrder }}
+        />
+      )}
     </div>
   )
 }

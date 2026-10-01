@@ -341,6 +341,30 @@ class MockQueryBuilder {
       })
       storage.saveAll(next)
 
+      if (this.table === 'transactions') {
+        try {
+          const ordStorage = mockTables.orders
+          const allOrders = ordStorage.getAll()
+          const affectedOrderIds = new Set(deletedItems.map(t => t.order_id).filter(Boolean))
+          for (const ordId of affectedOrderIds) {
+            const ordIdx = allOrders.findIndex(o => o.id === ordId)
+            if (ordIdx !== -1) {
+              const remainingTxns = next.filter(t => t.order_id === ordId)
+              const totalPaid = remainingTxns.reduce((s, t) => s + Number(t.amount || 0), 0)
+              const ord = allOrders[ordIdx]
+              const totalAmount = Number(ord.total_amount || 0)
+              ord.deposit = totalPaid
+              ord.balance = Math.max(0, totalAmount - totalPaid)
+              ord.status = ord.balance === 0 && totalAmount > 0 ? 'paid' : (ord.deposit > 0 ? 'partial' : 'pending')
+              allOrders[ordIdx] = ord
+            }
+          }
+          ordStorage.saveAll(allOrders)
+        } catch {
+          // ignore
+        }
+      }
+
       if (this.table === 'staff') {
         try {
           const deletedIds = JSON.parse(localStorage.getItem('cw_deleted_staff_ids') || '[]')
@@ -389,14 +413,36 @@ class MockQueryBuilder {
     const ordersList = mockTables.orders.getAll()
 
     if (this.table === 'orders') {
-      records = records.map(ord => ({
-        ...ord,
-        customer: customersList.find(c => c.id === ord.customer_id) || null,
-        employee: staffList.find(s => s.id === ord.employee_id) || null,
-        cashier: staffList.find(s => s.id === ord.cashier_id) || null,
-        order_items: itemsList.filter(i => i.order_id === ord.id),
-        transactions: txnsList.filter(t => t.order_id === ord.id),
-      }))
+      records = records.map(ord => {
+        const ordTxns = txnsList.filter(t => t.order_id === ord.id)
+        const seenTxnIds = new Set()
+        const uniqueTxns = []
+        for (const t of ordTxns) {
+          if (!seenTxnIds.has(t.id)) {
+            seenTxnIds.add(t.id)
+            uniqueTxns.push(t)
+          }
+        }
+        const totalPaid = uniqueTxns.reduce((s, t) => s + Number(t.amount || 0), 0)
+        const totalAmount = Number(ord.total_amount || 0)
+        const trueDeposit = uniqueTxns.length > 0 ? totalPaid : Number(ord.deposit || 0)
+        const trueBalance = Math.max(0, totalAmount - trueDeposit)
+        const trueStatus = (trueBalance === 0 && totalAmount > 0)
+          ? 'paid'
+          : (trueDeposit > 0 ? 'partial' : 'pending')
+
+        return {
+          ...ord,
+          deposit: trueDeposit,
+          balance: trueBalance,
+          status: ord.status === 'cancelled' ? 'cancelled' : trueStatus,
+          customer: customersList.find(c => c.id === ord.customer_id) || null,
+          employee: staffList.find(s => s.id === ord.employee_id) || null,
+          cashier: staffList.find(s => s.id === ord.cashier_id) || null,
+          order_items: itemsList.filter(i => i.order_id === ord.id),
+          transactions: uniqueTxns,
+        }
+      })
     } else if (this.table === 'transactions') {
       records = records.map(t => {
         const parentOrder = ordersList.find(o => o.id === t.order_id)
@@ -486,12 +532,24 @@ class MockQueryBuilder {
           const allOrders = ordStorage.getAll()
           const ordIdx = allOrders.findIndex(o => o.id === txn.order_id)
           if (ordIdx !== -1) {
-            const ordTxns = [...mockTables.transactions.getAll(), ...newRecords].filter(t => t.order_id === txn.order_id)
-            const totalPaid = ordTxns.reduce((s, t) => s + Number(t.amount || 0), 0)
+            // Note: storage.saveAll(updated) above already includes newRecords.
+            // Retrieve actual saved transactions and deduplicate by id
+            const allTxns = mockTables.transactions.getAll()
+            const ordTxns = allTxns.filter(t => t.order_id === txn.order_id)
+            const seenTxnIds = new Set()
+            const uniqueTxns = []
+            for (const t of ordTxns) {
+              if (!seenTxnIds.has(t.id)) {
+                seenTxnIds.add(t.id)
+                uniqueTxns.push(t)
+              }
+            }
+            const totalPaid = uniqueTxns.reduce((s, t) => s + Number(t.amount || 0), 0)
             const ord = allOrders[ordIdx]
+            const totalAmount = Number(ord.total_amount || 0)
             ord.deposit = totalPaid
-            ord.balance = Math.max(0, Number(ord.total_amount || 0) - totalPaid)
-            ord.status = ord.balance === 0 ? 'paid' : (ord.deposit > 0 ? 'partial' : 'pending')
+            ord.balance = Math.max(0, totalAmount - totalPaid)
+            ord.status = ord.balance === 0 && totalAmount > 0 ? 'paid' : (ord.deposit > 0 ? 'partial' : 'pending')
             allOrders[ordIdx] = ord
             ordStorage.saveAll(allOrders)
           }

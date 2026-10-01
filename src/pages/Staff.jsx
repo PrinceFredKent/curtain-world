@@ -41,11 +41,11 @@ const staffSchema = z.object({
 })
 
 const STAFF_ROLES = [
+  { value: 'cashier', label: 'Cashier (Receives Payments & Deposits)' },
   { value: 'employee', label: 'Sales Representative (Attends Clients & Orders)' },
   { value: 'workshop', label: 'Workshop / Tailor (Sewing & Curtain Making)' },
   { value: 'installer', label: 'Curtain Installer (Measurements & Fitting)' },
   { value: 'both', label: 'Sales & Workshop (Multi-role)' },
-  { value: 'cashier', label: 'Cashier Assistant' },
   { value: 'admin', label: 'Store Manager / Admin' },
 ]
 
@@ -60,11 +60,11 @@ const roleBadgeColors = {
 }
 
 const roleLabels = {
+  cashier: 'Cashier',
   employee: 'Sales Representative',
   workshop: 'Workshop / Tailor',
   installer: 'Installer',
   both: 'Sales & Workshop',
-  cashier: 'Cashier Assistant',
   admin: 'Store Manager',
   super_admin: 'Super Admin & Cashier',
 }
@@ -79,7 +79,7 @@ function StaffFormModal({ open, onClose, initialData, isEditing = false }) {
     defaultValues: initialData || {
       name: '',
       phone: '',
-      role: 'employee',
+      role: 'cashier',
       email: '',
       active: true,
     },
@@ -498,7 +498,7 @@ export function Staff() {
                             <button
                               type="button"
                               onClick={() => setEditingStaff(member)}
-                              className="p-1.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                              className="p-1.5 rounded-lg hover:bg-purple-500/10 active:scale-95 transition-all cursor-pointer"
                               title="Edit staff details"
                               style={{ color: 'var(--fg-muted)' }}
                             >
@@ -510,7 +510,7 @@ export function Staff() {
                                 <button
                                   type="button"
                                   onClick={() => handleToggleStatus(member)}
-                                  className="p-1.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-[11px] font-medium"
+                                  className="px-2 py-1 rounded-lg hover:bg-purple-500/10 active:scale-95 transition-all text-[11px] font-medium cursor-pointer"
                                   title={member.active ? 'Deactivate staff' : 'Activate staff'}
                                   style={{ color: member.active ? '#d97706' : '#16a34a' }}
                                 >
@@ -520,7 +520,7 @@ export function Staff() {
                                 <button
                                   type="button"
                                   onClick={() => handleDelete(member)}
-                                  className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 transition-colors"
+                                  className="p-1.5 rounded-lg hover:bg-red-500/15 text-red-500 hover:text-red-600 active:scale-95 transition-all cursor-pointer"
                                   title="Remove staff member"
                                 >
                                   <Trash2 className="h-4 w-4" />

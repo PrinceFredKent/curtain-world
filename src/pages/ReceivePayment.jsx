@@ -16,7 +16,8 @@ import {
   formatDate,
   formatDateTime,
   getOrderStatus,
-  getPaymentMethodLabel
+  getPaymentMethodLabel,
+  isCashierOrAdmin
 } from '../lib/utils'
 import {
   generateReceiptPDF,
@@ -24,6 +25,7 @@ import {
   downloadOrderPNG,
   printOrderReceipt
 } from '../lib/pdf'
+import { WhatsAppShareModal } from '../components/orders/WhatsAppShareModal'
 import {
   HandCoins,
   Search,
@@ -36,6 +38,7 @@ import {
   Printer,
   FileText,
   Image as ImageIcon,
+  MessageSquare,
   ArrowRight,
   Sparkles,
   AlertCircle
@@ -45,7 +48,7 @@ export function ReceivePayment() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const toast = useToast()
-  const { user, fullName } = useAuth()
+  const { user, fullName, activeCashierId, setActiveCashierId } = useAuth()
 
   const urlCustomerId = searchParams.get('customerId')
   const urlOrderId = searchParams.get('orderId')
@@ -58,7 +61,9 @@ export function ReceivePayment() {
   const allCustomers = customers || []
   const allOrders = ordersData?.data || []
   const activeStaff = (allStaffList || []).filter(s => s.active !== false)
-  const adminStaff = activeStaff.find(s => s.id === user?.id || s.email === user?.email || s.role === 'super_admin' || s.role === 'admin')
+  const cashierStaff = activeStaff.filter(isCashierOrAdmin)
+  const eligibleCashiers = cashierStaff.length > 0 ? cashierStaff : activeStaff
+  const adminStaff = eligibleCashiers.find(s => s.id === (activeCashierId || user?.id) || s.email === user?.email || s.role === 'super_admin' || s.role === 'admin')
 
   // Customer Autocomplete States
   const [customerQuery, setCustomerQuery] = useState('')
@@ -72,9 +77,11 @@ export function ReceivePayment() {
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [paymentType, setPaymentType] = useState('payment')
   const [employeeId, setEmployeeId] = useState('')
+  const [cashierId, setCashierId] = useState(activeCashierId || user?.id || '')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [completedTxn, setCompletedTxn] = useState(null)
+  const [showWhatsApp, setShowWhatsApp] = useState(false)
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -181,11 +188,12 @@ export function ReceivePayment() {
 
     setSubmitting(true)
     try {
+      const selectedCashierStaff = activeStaff.find(s => s.id === (cashierId || activeCashierId)) || adminStaff
       const txn = await createTxn.mutateAsync({
         order_id: selectedOrderId,
         customer_id: selectedCustomerId,
         employee_id: employeeId || selectedOrder?.employee_id || null,
-        cashier_id: adminStaff?.id || user?.id || null,
+        cashier_id: cashierId || activeCashierId || adminStaff?.id || user?.id || null,
         type: paymentType,
         amount: numericAmount,
         payment_method: paymentMethod || 'cash',
@@ -193,12 +201,26 @@ export function ReceivePayment() {
       })
 
       toast({ type: 'success', message: 'Payment recorded and balance updated!' })
+
+      const prevDeposit = Number(selectedOrder?.deposit || 0)
+      const totalAmount = Number(selectedOrder?.total_amount || 0)
+      const updatedTotalPaid = prevDeposit + numericAmount
+      const updatedBalance = Math.max(0, currentOrderBalance - numericAmount)
+
+      const updatedOrder = {
+        ...selectedOrder,
+        deposit: updatedTotalPaid,
+        balance: updatedBalance,
+        status: updatedBalance === 0 && totalAmount > 0 ? 'paid' : (updatedTotalPaid > 0 ? 'partial' : 'pending'),
+      }
+
       setCompletedTxn({
         ...txn,
-        order: selectedOrder,
+        order: updatedOrder,
+        remainingBalance: updatedBalance,
         customer: allCustomers.find(c => c.id === selectedCustomerId),
         employee: activeStaff.find(s => s.id === (employeeId || selectedOrder?.employee_id)),
-        cashier: adminStaff || { name: fullName || 'Admin & Cashier' },
+        cashier: selectedCashierStaff || { name: fullName || 'Admin & Cashier' },
       })
     } catch (err) {
       toast({ type: 'error', message: err.message || 'Failed to record payment.' })
@@ -315,22 +337,29 @@ export function ReceivePayment() {
               </div>
               <div>
                 <span style={{ color: 'var(--fg-muted)' }}>Remaining Balance:</span>
-                <p className={`font-bold text-base mt-0.5 ${newRemainingBalance > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                  {formatCurrency(newRemainingBalance)}
+                <p className={`font-bold text-base mt-0.5 ${completedTxn.remainingBalance > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                  {completedTxn.remainingBalance === 0 ? '🎉 Fully Cleared (0 UGX)' : formatCurrency(completedTxn.remainingBalance)}
                 </p>
               </div>
             </div>
 
-            {/* Print & Download Actions */}
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            {/* Print, Download & WhatsApp Actions */}
+            <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+              <Button
+                type="button"
+                onClick={() => setShowWhatsApp(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+              >
+                <MessageSquare className="h-4 w-4" /> Send to WhatsApp
+              </Button>
               <Button onClick={handlePrintReceipt}>
                 <Printer className="h-4 w-4" /> Print Receipt (58mm)
               </Button>
               <Button variant="secondary" onClick={handleDownloadPDF}>
-                <FileText className="h-4 w-4" /> Download PDF
+                <FileText className="h-4 w-4" /> PDF
               </Button>
               <Button variant="secondary" onClick={handleDownloadPNG}>
-                <ImageIcon className="h-4 w-4" /> Download Image (PNG)
+                <ImageIcon className="h-4 w-4" /> PNG
               </Button>
             </div>
 
@@ -674,22 +703,28 @@ export function ReceivePayment() {
                       ))}
                     </Select>
 
-                    <div>
-                      <label className="block text-sm font-medium mb-1" style={{ color: 'var(--fg)' }}>
-                        Cashier Shift
-                      </label>
-                      <div
-                        className="p-2.5 rounded-lg border text-xs flex items-center justify-between"
-                        style={{ background: 'var(--surface-hover)', borderColor: 'var(--border)' }}
-                      >
-                        <span className="font-semibold" style={{ color: 'var(--fg)' }}>
-                          {fullName || 'Admin & Cashier'}
-                        </span>
-                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                          Active Cashier
-                        </span>
-                      </div>
-                    </div>
+                    <Select
+                      label="Cashier Shift (Received By)"
+                      value={cashierId}
+                      onChange={e => {
+                        setCashierId(e.target.value)
+                        setActiveCashierId(e.target.value)
+                      }}
+                    >
+                      {eligibleCashiers.map(s => {
+                        const isCurrent = s.id === (activeCashierId || user?.id)
+                        return (
+                          <option key={s.id} value={s.id}>
+                            {s.name} ({s.role || 'Staff'}) {isCurrent ? '— Active Shift' : ''}
+                          </option>
+                        )
+                      })}
+                      {!eligibleCashiers.some(s => s.id === (cashierId || activeCashierId || user?.id)) && (
+                        <option value={cashierId || activeCashierId || user?.id || ''}>
+                          {fullName || 'Admin & Cashier'} (Active Shift)
+                        </option>
+                      )}
+                    </Select>
                   </div>
 
                   {/* Notes */}
@@ -761,6 +796,13 @@ export function ReceivePayment() {
           )}
         </div>
       )}
+
+      {/* WhatsApp Sharing Dialog */}
+      <WhatsAppShareModal
+        open={showWhatsApp}
+        onClose={() => setShowWhatsApp(false)}
+        orderData={completedTxn}
+      />
     </div>
   )
 }

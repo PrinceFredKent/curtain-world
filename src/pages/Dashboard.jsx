@@ -153,6 +153,7 @@ export function Dashboard() {
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'var(--fg-muted)' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 12, fill: 'var(--fg-muted)' }} axisLine={false} tickLine={false} tickFormatter={v => formatCompactUGX(v)} />
                 <Tooltip
+                  cursor={false}
                   formatter={v => formatCurrency(v)}
                   contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg)' }}
                 />
